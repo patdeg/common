@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"mygotome/common"
+	"github.com/patdeg/common"
 
 	"google.golang.org/appengine/v2/user"
 )

@@ -4,11 +4,12 @@ package track
 import (
 	"errors"
 	"fmt"
-	"mygotome/common"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/patdeg/common"
 
 	"github.com/mssola/user_agent"
 	"golang.org/x/net/context"
