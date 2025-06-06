@@ -85,7 +85,7 @@ func googleOAuthConfig(r *http.Request) *oauth2.Config {
 // the OAuth login flow. The current path is used as the state value so users
 // return to their original destination after logging in.
 func RedirectIfNotLoggedIn(w http.ResponseWriter, r *http.Request) bool {
-	if _, err := r.Cookie("organizer_email"); err != nil {
+	if _, err := r.Cookie("user_email"); err != nil {
 		url := googleOAuthConfig(r).AuthCodeURL(sanitizeRedirect(r.URL.Path))
 		http.Redirect(w, r, url, http.StatusFound)
 		return true
@@ -97,7 +97,7 @@ func RedirectIfNotLoggedIn(w http.ResponseWriter, r *http.Request) bool {
 // 401 status instead of redirecting. It is intended for API endpoints that
 // require authentication.
 func RedirectIfNotLoggedInAPI(w http.ResponseWriter, r *http.Request) bool {
-	if _, err := r.Cookie("organizer_email"); err != nil {
+	if _, err := r.Cookie("user_email"); err != nil {
 		http.Error(w, "Login required", http.StatusUnauthorized)
 		return true
 	}
@@ -142,7 +142,7 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		host = h
 	}
 	ck := &http.Cookie{
-		Name:     "organizer_email",
+		Name:     "user_email",
 		Value:    email,
 		Path:     "/",
 		Expires:  time.Now().Add(24 * time.Hour),
