@@ -35,3 +35,11 @@ The packages read several configuration values from environment variables:
 
 If a variable is unset, sensible defaults defined in the code will be used.
 
+## App Engine Version
+
+The `gcp` package includes a `Version` helper that fetches the App Engine
+version ID from a request context. The function stores the major part of the
+version string in the exported `common.VERSION` variable and returns it. Call
+this helper during initialization so the application can log or act on the
+deployed version via `common.VERSION`.
+
