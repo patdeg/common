@@ -1,4 +1,10 @@
 // Package gcp provides Google Cloud helpers for mygoto.me service.
+//
+// This file contains helpers for interacting with BigQuery. It includes
+// functions to authenticate using the default service account, create
+// datasets and tables when they do not exist and stream rows using the
+// BigQuery streaming API. All operations log errors via the common logging
+// helpers and streaming inserts are retried once when failures occur.
 package gcp
 
 import (
@@ -12,7 +18,8 @@ import (
 )
 
 // GetBQServiceAccountClient returns an authenticated BigQuery service using the
-// default service account credentials.
+// default service account credentials. Errors encountered while creating the
+// client are logged and returned to the caller.
 func GetBQServiceAccountClient(c context.Context) (*bigquery.Service, error) {
 	httpClient, err := google.DefaultClient(c,
 		"https://www.googleapis.com/auth/userinfo.email",
@@ -25,20 +32,23 @@ func GetBQServiceAccountClient(c context.Context) (*bigquery.Service, error) {
 	return bigquery.New(httpClient)
 }
 
-// CreateDatasetIfNotExists ensures the given dataset exists.
-// If the dataset is not found, it will be created.
+// CreateDatasetIfNotExists ensures the given dataset exists. It first attempts
+// to retrieve the dataset and if it receives a 404 error, a new dataset is
+// created. All errors are logged and returned to the caller.
 func CreateDatasetIfNotExists(c context.Context, projectID, datasetID string) error {
 	svc, err := GetBQServiceAccountClient(c)
 	if err != nil {
 		return err
 	}
 
+	// Check whether the dataset already exists.
 	_, err = bigquery.NewDatasetsService(svc).Get(projectID, datasetID).Do()
 	if err == nil {
 		Debug("Dataset %s already exists", datasetID)
 		return nil
 	}
 
+	// A 404 means the dataset does not exist yet, so create it now.
 	if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == 404 {
 		Info("Dataset %s not found, creating", datasetID)
 		ds := &bigquery.Dataset{DatasetReference: &bigquery.DatasetReference{ProjectId: projectID, DatasetId: datasetID}}
@@ -54,7 +64,9 @@ func CreateDatasetIfNotExists(c context.Context, projectID, datasetID string) er
 }
 
 // CreateTableInBigQuery deletes any existing table with the same ID and then
-// creates the provided table definition.
+// creates the provided table definition. Deletion errors are logged but do not
+// stop table creation. The caller is expected to provide a table with a valid
+// TableReference and Schema.
 func CreateTableInBigQuery(c context.Context, newTable *bigquery.Table) error {
 
 	if newTable == nil {
@@ -75,6 +87,7 @@ func CreateTableInBigQuery(c context.Context, newTable *bigquery.Table) error {
 		return err
 	}
 
+	// Attempt to delete any existing table with the same ID to start fresh.
 	err = bigquery.
 		NewTablesService(bqServiceAccountService).
 		Delete(
@@ -86,6 +99,7 @@ func CreateTableInBigQuery(c context.Context, newTable *bigquery.Table) error {
 		Info("There was an error while trying to delete old snapshot table: %v", err)
 	}
 
+	// Create the table using the supplied definition.
 	_, err = bigquery.
 		NewTablesService(bqServiceAccountService).
 		Insert(
@@ -98,7 +112,9 @@ func CreateTableInBigQuery(c context.Context, newTable *bigquery.Table) error {
 }
 
 // StreamDataInBigquery inserts rows into a BigQuery table using the streaming
-// API and retries once if the initial attempt fails.
+// API. If the first attempt fails, the function waits 10 seconds and retries
+// once. Errors from each attempt are logged and the error from the second
+// attempt is returned.
 func StreamDataInBigquery(c context.Context, projectId, datasetId, tableId string, req *bigquery.TableDataInsertAllRequest) error {
 
 	if req == nil {
@@ -116,14 +132,14 @@ func StreamDataInBigquery(c context.Context, projectId, datasetId, tableId strin
 		InsertAll(projectId, datasetId, tableId, req).
 		Do()
 	if err != nil {
-		Info("Error streaming data to Big Query, trying again in 10 seconds: %v", err)
+		Info("Error streaming data to BigQuery, will retry in 10 seconds: %v", err)
 		time.Sleep(time.Second * 10)
 		resp, err = bigquery.
 			NewTabledataService(bqServiceAccountService).
 			InsertAll(projectId, datasetId, tableId, req).
 			Do()
 		if err != nil {
-			Error("Error again streaming data to Big Query: %v", err)
+			Error("Second attempt to stream data to BigQuery failed: %v", err)
 			return err
 		} else {
 			Info("2nd try was successful")

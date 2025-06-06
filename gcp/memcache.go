@@ -1,5 +1,9 @@
 package gcp
 
+// This file provides small wrappers around App Engine's memcache library.
+// Cached values are stored in plain text and may be evicted at any time, so
+// do not store sensitive information unless it is encrypted.
+
 import (
 	"time"
 
@@ -7,32 +11,38 @@ import (
 	"google.golang.org/appengine/v2/memcache"
 )
 
-// Wrapper around Delete Memcache.
+// DeleteMemCache removes a key from memcache.
+// memcache.ErrCacheMiss is ignored so callers can treat missing keys as a no-op.
+// Any other error is logged and returned.
 func DeleteMemCache(c context.Context, key string) (err error) {
 	err = memcache.Delete(c, key)
 	if err == memcache.ErrCacheMiss {
-		err = nil
-		return
-	} else if err != nil {
-		Error("GetMemCache: error getting item %v: %v", key, err)
-		return
+		return nil
 	}
-	return
+	if err != nil {
+		Error("GetMemCache: error getting item %v: %v", key, err)
+		return err
+	}
+	return nil
 }
 
-// Wrapper around Get Memcache. Return empty if error or not found.
+// GetMemCache retrieves raw bytes from memcache.
+// When the key is missing, memcache.ErrCacheMiss is returned with an empty slice.
+// Other errors are logged and returned with an empty slice.
 func GetMemCache(c context.Context, key string) ([]byte, error) {
 	object, err := memcache.Get(c, key)
 	if err == memcache.ErrCacheMiss {
 		return []byte{}, err
-	} else if err != nil {
+	}
+	if err != nil {
 		Error("GetMemCache: error getting item %v: %v", key, err)
 		return []byte{}, err
 	}
 	return object.Value, nil
 }
 
-// Wrapper around Set Memcache. Return empty if error or not found.
+// SetMemCache stores bytes in memcache for the specified number of hours.
+// If the key already exists it is overwritten. Errors are logged.
 func SetMemCache(c context.Context, key string, item []byte, hours int32) {
 	object := &memcache.Item{
 		Key:        key,
@@ -51,6 +61,12 @@ func SetMemCache(c context.Context, key string, item []byte, hours int32) {
 	}
 }
 
+// GetMemCacheString returns the cached string for the provided key.
+// An empty string is returned when the key is missing or an error occurs.
+//
+// Example:
+//
+//	name := GetMemCacheString(ctx, "user-name")
 func GetMemCacheString(c context.Context, key string) string {
 	item, err := GetMemCache(c, key)
 	if err != nil {
@@ -59,17 +75,27 @@ func GetMemCacheString(c context.Context, key string) string {
 	return B2S(item)
 }
 
+// SetMemCacheString stores the provided string in memcache for the given hours.
+// Existing values are overwritten.
+//
+// Example:
+//
+//	SetMemCacheString(ctx, "user-name", "gopher", 2)
 func SetMemCacheString(c context.Context, key string, item string, hours int32) {
 	SetMemCache(c, key, []byte(item), hours)
 }
 
-// Wrapper around Get Memcache. Return memcache.ErrCacheMiss if not found, or error
+// GetObjMemCache retrieves an object stored with SetObjMemCache.
+// memcache.ErrCacheMiss is returned when the key is missing. Any other error is
+// returned as-is.
 func GetObjMemCache(c context.Context, key string, v interface{}) error {
 	_, err := memcache.Gob.Get(c, key, v)
 	return err
 }
 
-// Wrapper around Set Memcache Object
+// SetObjMemCache stores an arbitrary object in memcache for the given duration.
+// Do not store sensitive data here unless it is encrypted as the cache is
+// accessible by other applications running in the same environment.
 func SetObjMemCache(c context.Context, key string, v interface{}, hours int32) error {
 	item := memcache.Item{
 		Key:        key,

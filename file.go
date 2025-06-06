@@ -7,22 +7,23 @@ import (
 	"golang.org/x/net/context"
 )
 
+// GetContent reads the file named by filename and returns its contents.
+// Any errors encountered are logged and returned.
 func GetContent(c context.Context, filename string) (*[]byte, error) {
-	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
+	file, err := os.Open(filename)
 	if err != nil {
-		Error("Error opening file: %v", err)
+		Error("Error opening file %s: %v", filename, err)
 		return nil, err
 	}
 	defer file.Close()
+
 	Info("FILE FOUND : %s", filename)
-	buffer := make([]byte, 10*1024*1024)
-	n, err := file.Read(buffer)
-	if (err == nil) || (err == io.EOF) {
-		content := buffer[:n]
-		return &content, nil
+	content, err := io.ReadAll(file)
+	if err != nil {
+		Error("Error reading file %s: %v", filename, err)
+		return nil, err
 	}
 
-	Error("Error reading file: %v", err)
-	return nil, err
+	return &content, nil
 
 }

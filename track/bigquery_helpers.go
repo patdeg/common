@@ -18,9 +18,10 @@ import (
 // variable so tests can replace it with a stub implementation.
 var streamDataFn = gcp.StreamDataInBigquery
 
-// insertWithTableCreation streams rows into BigQuery. If the initial insert
-// fails with a 404 "table not found" error, it will create the table using the
-// provided callback and retry the insert once.
+// insertWithTableCreation streams data to BigQuery and creates the table if it
+// does not exist. When the initial insert returns a 404 error, the provided
+// createTable callback is invoked to ensure the dataset and table exist before
+// retrying the insert.
 func insertWithTableCreation(c context.Context, projectID, datasetID, tableID string, req *bigquery.TableDataInsertAllRequest, createTable func(context.Context, string) error) error {
 	common.Debug("insertWithTableCreation dataset=%s table=%s", datasetID, tableID)
 	err := streamDataFn(c, projectID, datasetID, tableID, req)

@@ -1,5 +1,11 @@
 package common
 
+// This file provides helper functions used across HTTP handlers to detect
+// bots and referrer spam as well as a tiny HTML template for timed redirects.
+// The anti-spam logic relies on a blacklist of known domains while bot
+// detection combines heuristics and the user_agent package. The message
+// template renders a simple page that redirects after a given timeout.
+
 import (
 	"html/template"
 	"net/http"
@@ -14,61 +20,73 @@ import (
 	"google.golang.org/appengine/v2/urlfetch"
 )
 
-// List of spammers & traffic builder - MUST BE IN LOWERCASE, Domains or Full Name
-var SPAMMERS = map[string]bool{
-	"4webmasters.org":            true,
-	"abiente.ru":                 true,
-	"allmetalworking.ru":         true,
-	"archidom.info":              true,
-	"best-seo-report.com":        true,
-	"betonka.pro":                true,
-	"biznesluxe.ru":              true,
-	"burger-imperia.com":         true,
-	"buttons-for-website.com":    true,
-	"buyessaynow.biz":            true,
-	"с.новым.годом.рф":           true,
-	"darodar.com":                true,
-	"e-buyeasy.com":              true,
-	"erot.co":                    true,
-	"event-tracking.com":         true,
-	"fast-wordpress-start.com":   true,
-	"finteks.ru":                 true,
-	"fix-website-errors.com":     true,
-	"floating-share-buttons.com": true,
-	"free-social-buttons.com":    true,
-	"get-free-traffic-now.com":   true,
-	"hundejo.com":                true,
-	"hvd-store.com":              true,
-	"ifmo.ru":                    true,
-	"interesnie-faktu.ru":        true,
-	"kinoflux.net":               true,
-	"kruzakivrazbor.ru":          true,
-	"lenpipet.ru":                true,
-	"letous.ru":                  true,
-	"net-profits.xyz":            true,
-	"pizza-imperia.com":          true,
-	"pizza-tycoon.com":           true,
-	"rankings-analytics.com":     true,
-	"seo-2-0.com":                true,
-	"share-buttons.xyz":          true,
-	"success-seo.com":            true,
-	"top1-seo-service.com":       true,
-	"traffic2cash.xyz":           true,
-	"traffic2money.com":          true,
-	"trafficmonetizer.org":       true,
-	"vashsvet.com":               true,
-	"video-chat.in":              true,
-	"videochat.tv.br":            true,
-	"video--production.com":      true,
-	"webmonetizer.net":           true,
-	"website-stealer.nufaq.com":  true,
-	"web-revenue.xyz":            true,
-	"xrus.org":                   true,
-	"zahvat.ru":                  true,
+// spamDomainList holds known referrer spam domains. The list was compiled from
+// various public blacklists around 2015 and must be kept in lowercase.
+var spamDomainList = []string{
+	"4webmasters.org",
+	"abiente.ru",
+	"allmetalworking.ru",
+	"archidom.info",
+	"best-seo-report.com",
+	"betonka.pro",
+	"biznesluxe.ru",
+	"burger-imperia.com",
+	"buttons-for-website.com",
+	"buyessaynow.biz",
+	"с.новым.годом.рф",
+	"darodar.com",
+	"e-buyeasy.com",
+	"erot.co",
+	"event-tracking.com",
+	"fast-wordpress-start.com",
+	"finteks.ru",
+	"fix-website-errors.com",
+	"floating-share-buttons.com",
+	"free-social-buttons.com",
+	"get-free-traffic-now.com",
+	"hundejo.com",
+	"hvd-store.com",
+	"ifmo.ru",
+	"interesnie-faktu.ru",
+	"kinoflux.net",
+	"kruzakivrazbor.ru",
+	"lenpipet.ru",
+	"letous.ru",
+	"net-profits.xyz",
+	"pizza-imperia.com",
+	"pizza-tycoon.com",
+	"rankings-analytics.com",
+	"seo-2-0.com",
+	"share-buttons.xyz",
+	"success-seo.com",
+	"top1-seo-service.com",
+	"traffic2cash.xyz",
+	"traffic2money.com",
+	"trafficmonetizer.org",
+	"vashsvet.com",
+	"video-chat.in",
+	"videochat.tv.br",
+	"video--production.com",
+	"webmonetizer.net",
+	"website-stealer.nufaq.com",
+	"web-revenue.xyz",
+	"xrus.org",
+	"zahvat.ru",
 }
 
-// List of untracked bots
-var CUSTOM_BOTS_USER_AGENT = []string{
+// SPAMMERS maps domains from spamDomainList for quick lookup.
+var SPAMMERS map[string]bool
+
+func init() {
+	SPAMMERS = make(map[string]bool, len(spamDomainList))
+	for _, d := range spamDomainList {
+		SPAMMERS[d] = true
+	}
+}
+
+// botUserAgents lists user agent strings for crawlers that are not detected by
+// the user_agent package. The entries originate from server logs.
+var botUserAgents = []string{
 	"Mozilla/5.0 (compatible; Dataprovider/6.92; +https://www.dataprovider.com/)",
 	"SSL Labs (https://www.ssllabs.com/about/assessment.html)",
 	"CRAZYWEBCRAWLER 0.9.10, http://www.crazywebcrawler.com",
@@ -76,6 +94,9 @@ var CUSTOM_BOTS_USER_AGENT = []string{
 	"AdnormCrawler www.adnorm.com/crawler",
 	"Mozilla/5.0 (compatible; Qwantify/2.2w; +https://www.qwant.com/)/*",
 }
+
+// CUSTOM_BOTS_USER_AGENT is kept for backward compatibility.
+var CUSTOM_BOTS_USER_AGENT = botUserAgents
 
 func GetServiceAccountClient(c context.Context) *http.Client {
 	serviceAccountClient := &http.Client{
@@ -129,6 +150,9 @@ var messagelTemplate = template.
 		Delims("[[", "]]").
 		Parse(messageHTML))
 
+// MessageHandler renders a minimal HTML page using messagelTemplate. The page
+// displays a message and performs a client-side redirect to redirectUrl after
+// timeoutSec seconds via a meta-refresh tag.
 func MessageHandler(c context.Context, w http.ResponseWriter, message string, redirectUrl string, timeoutSec int64) {
 	if err := messagelTemplate.Execute(w, template.FuncMap{
 		"Message":  message,
@@ -145,29 +169,34 @@ func IsHacker(r *http.Request) bool {
 
 	c := r.Context()
 
+	// Quickly reject IPs that were previously flagged as malicious.
 	if gcp.GetMemCacheString(c, "hacker-"+r.RemoteAddr) != "" {
 		Info("IsHacker: Repeat IP %v", r.RemoteAddr)
 		return true
 	}
 
+	// Block requests with spammy referrers.
 	if IsSpam(c, r.Referer()) {
 		Info("IsHacker: Is Spam")
 		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
 		return true
 	}
 
+	// Empty user agents are suspicious.
 	if r.UserAgent() == "" {
 		Info("IsHacker: UserAgent empty")
 		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
 		return true
 	}
 
+	// Reject attempts to access PHP scripts.
 	if strings.Contains(r.URL.Path, ".php") {
 		Info("IsHacker: Requesting .php page, rejecting: %v", r.URL.Path)
 		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
 		return true
 	}
 
+	// WordPress probing is treated as malicious.
 	if strings.HasPrefix(r.URL.Path, "/wp/") {
 		Info("IsHacker: WordPress path: %v", r.URL.Path)
 		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
@@ -180,6 +209,7 @@ func IsHacker(r *http.Request) bool {
 		return true
 	}
 
+	// Old blog paths are not served anymore; accessing them is suspicious.
 	if strings.HasPrefix(r.URL.Path, "/blog/") {
 		Info("IsHacker: Blog path: %v", r.URL.Path)
 		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
@@ -192,6 +222,7 @@ func IsHacker(r *http.Request) bool {
 		return true
 	}
 
+	// Temporary country based block used during a spam campaign.
 	if r.Header.Get("X-AppEngine-Country") == "UA" {
 		if (r.Header.Get("X-AppEngine-City") == "lviv") || (r.Header.Get("X-AppEngine-City") == "kyiv") {
 			Info("IsHacker: Ukraine traffic - City : %v", r.Header.Get("X-AppEngine-City"))
@@ -204,11 +235,15 @@ func IsHacker(r *http.Request) bool {
 
 }
 
+// IsMobile returns true when the user agent represents a mobile device.
+// It uses the github.com/mssola/user_agent library to parse the UA string.
 func IsMobile(useragent string) bool {
 	ua := user_agent.New(useragent)
 	return ua.Mobile()
 }
 
+// IsBot reports whether the agent is a known crawler. The heuristics rely on
+// the user_agent library and a small list of custom user agents.
 func IsBot(useragent string) bool {
 	ua := user_agent.New(useragent)
 	browserName, _ := ua.Browser()
@@ -216,11 +251,13 @@ func IsBot(useragent string) bool {
 }
 
 func IsSpam(c context.Context, referer string) bool {
+	// Empty referrers are ignored.
 	if referer == "" {
 		return false
 	}
 	referer = strings.ToLower(referer)
 
+	// First check for an exact match against known spam hosts.
 	if SPAMMERS[referer] {
 		Debug("Referer in black list, rejecting: %v", referer)
 		return true
@@ -231,6 +268,7 @@ func IsSpam(c context.Context, referer string) bool {
 		return false
 	}
 
+	// Check the registrable domain part of the referrer as well.
 	segments := strings.Split(strings.ToLower(u.Host), ".")
 	n := len(segments)
 	if n < 2 {
@@ -249,6 +287,7 @@ func IsSpam(c context.Context, referer string) bool {
 
 func IsCrawler(r *http.Request) bool {
 	userAgent := r.Header.Get("User-Agent")
+	// Look for explicit crawler indicators first.
 	if strings.Contains(r.RequestURI, "_escaped_fragment_") {
 		Info("Google Escaped Fragment: %v", r.RequestURI)
 		return true
@@ -285,10 +324,12 @@ func IsCrawler(r *http.Request) bool {
 		Info("CATExplorador bot: %v (%v)", r.RequestURI, userAgent)
 		return true
 	}
+	// Some bots mark the request with specific query parameters.
 	if (r.FormValue("SEO") != "") || (r.FormValue("FB") != "") {
 		Info("SEO or FB parameter in url: %v", r.RequestURI)
 		return true
 	}
+	// Fallback to the user_agent library for generic bot detection.
 	ua := user_agent.New(r.Header.Get("User-Agent"))
 	return ua.Bot()
 
