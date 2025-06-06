@@ -1,5 +1,16 @@
+// Package track defines helpers used for pixel tracking and BigQuery storage.
+//
+// Dataset variables hold the BigQuery project and dataset names for visits,
+// events and AdWords tracking. Each variable defaults to a sensible name but
+// can be overridden via the corresponding environment variable, allowing the
+// runtime configuration to differ from the source defaults.
+//
+// onePixelPNG contains a transparent 1×1 PNG used as the response for tracking
+// requests.
 package track
 
+// Dataset and project IDs are read from environment variables when available,
+// otherwise the defaults below are used.
 var (
 	bqProjectID      = getEnv("BQ_PROJECT_ID", "mygotome")
 	visitsDataset    = getEnv("VISITS_DATASET", "visits")
