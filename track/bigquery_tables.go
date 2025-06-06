@@ -3,7 +3,7 @@ package track
 import (
 	"errors"
 
-	"mygotome/common"
+	"github.com/patdeg/common"
 
 	"golang.org/x/net/context"
 	bigquery "google.golang.org/api/bigquery/v2"

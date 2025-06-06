@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"mygotome/common"
+	"github.com/patdeg/common"
 
 	"github.com/mssola/user_agent"
 	appengine "google.golang.org/appengine/v2"
