@@ -41,6 +41,7 @@ func TestToString(t *testing.T) {
 
 // TestS2F ensures that S2F parses numeric strings and returns zero for
 // malformed values.
+
 func TestS2F(t *testing.T) {
 	tests := []struct {
 		in   string
