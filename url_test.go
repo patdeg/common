@@ -1,6 +1,10 @@
+// Package common contains tests for URL helpers.
 package common
 
 import "testing"
+
+// TestIsValidHTTPURL checks that IsValidHTTPURL accepts HTTP/HTTPS URLs and
+// rejects other schemes or malformed strings.
 
 func TestIsValidHTTPURL(t *testing.T) {
 	valid := []string{

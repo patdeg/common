@@ -51,6 +51,13 @@ func DoesCookieExists(r *http.Request) bool {
 }
 
 // GetCookieID retrieves the visitor ID cookie or creates a new one if missing.
+//
+// The created cookie is secured with the following attributes:
+//   - Path is always set to "/" so the ID is sent for all application routes.
+//   - Expires is 30 days in the future, giving the cookie a one month lifetime.
+//   - HttpOnly and Secure are true to prevent JavaScript access and require HTTPS.
+//   - SameSite is Lax to protect against CSRF while allowing normal navigation.
+//   - Domain is only set when the host is neither localhost nor 127.0.0.1.
 func GetCookieID(w http.ResponseWriter, r *http.Request) string {
 	Debug(">>>> GetCookieID")
 
