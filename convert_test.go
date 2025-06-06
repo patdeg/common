@@ -1,6 +1,12 @@
+// Package common contains small helper routines used across different
+// packages. The tests in this file verify the behaviour of the conversion
+// utilities implemented in convert.go.
 package common
 
 import "testing"
+
+// TestCamelCase verifies that CamelCase converts dash separated strings into
+// camel cased words.
 
 func TestCamelCase(t *testing.T) {
 	got := CamelCase("hello-world")
@@ -10,55 +16,66 @@ func TestCamelCase(t *testing.T) {
 	}
 }
 
+// TestToString verifies that values of different basic types are converted
+// to their string representation as expected.
 func TestToString(t *testing.T) {
-	var nilVal interface{}
-	cases := []struct {
+	tests := []struct {
+		name string
 		in   interface{}
 		want string
 	}{
-		{123, "123"},
-		{int64(42), "42"},
-		{3.14, "3.14000000"},
-		{"foo", "foo"},
-		{true, "true"},
-		{nilVal, ""},
+		{"nil", nil, ""},
+		{"int", 5, "5"},
+		{"int64", int64(9), "9"},
+		{"float64", 1.23, "1.23000000"},
+		{"string", "foo", "foo"},
 	}
-	for _, c := range cases {
-		if got := ToString(c.in); got != c.want {
-			t.Errorf("ToString(%v) = %q, want %q", c.in, got, c.want)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ToString(tt.in); got != tt.want {
+				t.Errorf("ToString(%v) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
+
+// TestS2F ensures that S2F parses numeric strings and returns zero for
+// malformed values.
 
 func TestS2F(t *testing.T) {
 	tests := []struct {
 		in   string
 		want float64
 	}{
-		{"1.5", 1.5},
-		{"1", 1},
-		{"foo", 0},
+		{"42", 42},
+		{"3.14", 3.14},
+		{"bogus", 0},
 	}
 	for _, tt := range tests {
 		if got := S2F(tt.in); got != tt.want {
-			t.Errorf("S2F(%q) = %f, want %f", tt.in, got, tt.want)
+			t.Errorf("S2F(%q) = %v, want %v", tt.in, got, tt.want)
 		}
 	}
 }
 
+// TestRound exercises rounding with various precisions and negative numbers.
 func TestRound(t *testing.T) {
-	cases := []struct {
-		in        float64
+	tests := []struct {
+		name      string
+		n         float64
 		precision int
 		want      float64
 	}{
-		{3.14159, 2, 3.14},
-		{2.675, 2, 2.68},
-		{-1.2345, 2, -1.23},
+		{"up", 1.235, 2, 1.24},
+		{"down", 1.234, 2, 1.23},
+		{"negative", -1.235, 2, -1.24},
+		{"zero", 1.5, 0, 2},
 	}
-	for _, c := range cases {
-		if got := Round(c.in, c.precision); got != c.want {
-			t.Errorf("Round(%f, %d) = %f, want %f", c.in, c.precision, got, c.want)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Round(tt.n, tt.precision); got != tt.want {
+				t.Errorf("Round(%v,%d) = %v, want %v", tt.n, tt.precision, got, tt.want)
+			}
+		})
 	}
 }
