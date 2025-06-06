@@ -1,4 +1,6 @@
 // Package common provides shared helpers used across the application.
+// It includes utilities for reading and writing HTTP requests and responses
+// such as the JSON/XML helpers found in interfaces.go.
 package common
 
 import (
