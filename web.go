@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mssola/user_agent"
+	"github.com/patdeg/common/gcp"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -144,57 +145,57 @@ func IsHacker(r *http.Request) bool {
 
 	c := r.Context()
 
-	if GetMemCacheString(c, "hacker-"+r.RemoteAddr) != "" {
+	if gcp.GetMemCacheString(c, "hacker-"+r.RemoteAddr) != "" {
 		Info("IsHacker: Repeat IP %v", r.RemoteAddr)
 		return true
 	}
 
 	if IsSpam(c, r.Referer()) {
 		Info("IsHacker: Is Spam")
-		SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
 		return true
 	}
 
 	if r.UserAgent() == "" {
 		Info("IsHacker: UserAgent empty")
-		SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
 		return true
 	}
 
 	if strings.Contains(r.URL.Path, ".php") {
 		Info("IsHacker: Requesting .php page, rejecting: %v", r.URL.Path)
-		SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
 		return true
 	}
 
 	if strings.HasPrefix(r.URL.Path, "/wp/") {
 		Info("IsHacker: WordPress path: %v", r.URL.Path)
-		SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
 		return true
 	}
 
 	if strings.HasPrefix(r.URL.Path, "/wp-content/") {
 		Info("IsHacker: WordPress path: %v", r.URL.Path)
-		SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
 		return true
 	}
 
 	if strings.HasPrefix(r.URL.Path, "/blog/") {
 		Info("IsHacker: Blog path: %v", r.URL.Path)
-		SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
 		return true
 	}
 
 	if strings.HasPrefix(r.URL.Path, "/wordpress/") {
 		Info("IsHacker: WordPress path: %v", r.URL.Path)
-		SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
 		return true
 	}
 
 	if r.Header.Get("X-AppEngine-Country") == "UA" {
 		if (r.Header.Get("X-AppEngine-City") == "lviv") || (r.Header.Get("X-AppEngine-City") == "kyiv") {
 			Info("IsHacker: Ukraine traffic - City : %v", r.Header.Get("X-AppEngine-City"))
-			SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+			gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
 			return true
 		}
 	}

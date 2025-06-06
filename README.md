@@ -14,6 +14,12 @@ Import subpackages, for example:
 import "github.com/patdeg/common/auth"
 ```
 
+You can also import specialized helpers:
+```go
+import "github.com/patdeg/common/gcp"
+import "github.com/patdeg/common/ga"
+```
+
 ## Environment Variables
 
 The packages read several configuration values from environment variables:
@@ -28,3 +34,4 @@ The packages read several configuration values from environment variables:
 - `ADMIN_EMAILS`: comma-separated list of admin emails for login.
 
 If a variable is unset, sensible defaults defined in the code will be used.
+

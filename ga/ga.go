@@ -1,4 +1,5 @@
-package common
+// Package ga provides Google Analytics helpers.
+package ga
 
 import (
 	"bytes"
