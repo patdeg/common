@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"mygotome/common"
-	"mygotome/track"
+	"github.com/patdeg/common"
+	"github.com/patdeg/common/track"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
