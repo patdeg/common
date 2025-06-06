@@ -1,4 +1,8 @@
-// Package track contains analytics helpers, including AdWords click tracking.
+// Package track contains analytics helpers.
+//
+// This file implements AdWords click tracking. The handler stores the
+// query parameters provided by Google Ads in BigQuery before redirecting
+// the visitor to the landing page.
 package track
 
 import (
@@ -69,8 +73,11 @@ type Click struct {
 	BrowserVersion  string    `json:"browserVersion,omitempty"`
 }
 
-// createClicksTableInBigQuery creates an AdWords clicks table for the given
-// date in BigQuery.
+// createClicksTableInBigQuery creates the daily AdWords clicks table named
+// by the YYYYMMDD string d. The function ensures the dataset exists and
+// then attempts to create the table. It returns any error encountered
+// while creating the dataset or table, or when d does not match the
+// expected date format.
 func createClicksTableInBigQuery(c context.Context, d string) error {
 
 	common.Info("Create a new daily clicks table in BigQuery")
@@ -149,7 +156,8 @@ func createClicksTableInBigQuery(c context.Context, d string) error {
 }
 
 // CreateTodayClicksTableInBigQueryHandler sets up today's clicks table in
-// BigQuery. It can be triggered by a cron job or admin request.
+// BigQuery. It is typically called by a cron job or an administrator.
+// Errors while creating the table are sent as HTTP 500 responses.
 func CreateTodayClicksTableInBigQueryHandler(w http.ResponseWriter, r *http.Request) {
 	c := r.Context()
 	common.Info(">>> CreateTodayClicksTableInBigQueryHandler")
@@ -175,7 +183,8 @@ func CreateTodayClicksTableInBigQueryHandler(w http.ResponseWriter, r *http.Requ
 }
 
 // CreateTomorrowClicksTableInBigQueryHandler creates the BigQuery table for
-// tomorrow's clicks data. Intended for scheduled execution.
+// tomorrow's clicks data. It behaves like CreateTodayClicksTableInBigQueryHandler
+// but uses tomorrow's date when calling createClicksTableInBigQuery.
 func CreateTomorrowClicksTableInBigQueryHandler(w http.ResponseWriter, r *http.Request) {
 	c := r.Context()
 	common.Info(">>> CreateTomorrowClicksTableInBigQueryHandler")
@@ -200,8 +209,10 @@ func CreateTomorrowClicksTableInBigQueryHandler(w http.ResponseWriter, r *http.R
 
 }
 
-// StoreClickInBigQuery streams an AdWords click record to BigQuery, creating
-// today's table on demand.
+// StoreClickInBigQuery streams an AdWords click record to BigQuery. If the
+// daily table for today does not exist, insertWithTableCreation will create it
+// before retrying the insert. Any error from BigQuery or table creation is
+// returned to the caller.
 func StoreClickInBigQuery(c context.Context, click *Click) error {
 
 	req := &bigquery.TableDataInsertAllRequest{
@@ -267,8 +278,11 @@ func StoreClickInBigQuery(c context.Context, click *Click) error {
 	return insertWithTableCreation(c, adwordsProjectID, adwordsDataset, tableName, req, createClicksTableInBigQuery)
 }
 
-// AdWordsTrackingHandler collects detailed AdWords click information and then
-// redirects the user to the landing page specified by the `url` parameter.
+// AdWordsTrackingHandler collects detailed AdWords click information from the
+// request's query parameters and stores it in BigQuery. Expected parameters
+// include `url` for the landing page as well as `k` (keyword), `cm` (campaign
+// ID) and other standard Google Ads values. After recording the click, the
+// handler redirects the user to the validated `url` parameter.
 func AdWordsTrackingHandler(w http.ResponseWriter, r *http.Request) {
 	c := r.Context()
 
@@ -278,14 +292,16 @@ func AdWordsTrackingHandler(w http.ResponseWriter, r *http.Request) {
 	common.Debug("RequestURI: %v", r.RequestURI)
 
 	// Track Visitor cookie ID
-	cookie := common.GetCookieID(w, r)
+	cookie := common.GetCookieID(w, r) // visitor cookie
 	common.Debug("Cookie ID: %v", cookie)
 
+	// landing page specified by the `url` query parameter
 	redirectUrl := r.FormValue("url")
 	common.Debug("Redirect URL: %v", redirectUrl)
+	// Validate redirectUrl before using it
 	if !common.IsValidHTTPURL(redirectUrl) {
-		common.Error("Invalid redirect URL: %v", redirectUrl)
-		http.Error(w, "Invalid redirect URL", http.StatusBadRequest)
+		common.Error("invalid redirect URL %q", redirectUrl)
+		http.Error(w, "invalid redirect URL", http.StatusBadRequest)
 		return
 	}
 
@@ -312,31 +328,32 @@ func AdWordsTrackingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	click := Click{
-		Time:            time.Now(),
-		RedirectUrl:     redirectUrl,
-		Query:           common.Trunc500(query),
-		Campaignid:      r.FormValue("cm"),
-		Adgroupid:       r.FormValue("ag"),
-		Feeditemid:      r.FormValue("f"),
-		Targetid:        r.FormValue("tid"),
+		Time:        time.Now(),
+		RedirectUrl: redirectUrl,
+		Query:       common.Trunc500(query),
+		// AdWords specific query parameters
+		Campaignid:      r.FormValue("cm"),  // campaign id
+		Adgroupid:       r.FormValue("ag"),  // ad group id
+		Feeditemid:      r.FormValue("f"),   // feed item id
+		Targetid:        r.FormValue("tid"), // target id
 		Loc_Physical_Ms: r.FormValue("lp"),
 		Loc_Interest_Ms: r.FormValue("li"),
 		Matchtype:       r.FormValue("m"),
 		Network:         r.FormValue("n"),
-		Device:          r.FormValue("d"),
-		Devicemodel:     r.FormValue("dm"),
-		Creative:        r.FormValue("cr"),
-		Keyword:         common.Trunc500(r.FormValue("k")),
-		Placement:       r.FormValue("p"),
-		Target:          r.FormValue("t"),
-		Param1:          r.FormValue("p1"),
-		Param2:          r.FormValue("p2"),
-		Random:          r.FormValue("r"),
-		Aceid:           r.FormValue("a"),
-		Adposition:      r.FormValue("ap"),
-		Ignore:          r.FormValue("i"),
+		Device:          r.FormValue("d"),                  // device type
+		Devicemodel:     r.FormValue("dm"),                 // device model
+		Creative:        r.FormValue("cr"),                 // creative id
+		Keyword:         common.Trunc500(r.FormValue("k")), // matched keyword
+		Placement:       r.FormValue("p"),                  // placement
+		Target:          r.FormValue("t"),                  // target
+		Param1:          r.FormValue("p1"),                 // custom parameter 1
+		Param2:          r.FormValue("p2"),                 // custom parameter 2
+		Random:          r.FormValue("r"),                  // random number
+		Aceid:           r.FormValue("a"),                  // aceid
+		Adposition:      r.FormValue("ap"),                 // ad position
+		Ignore:          r.FormValue("i"),                  // ignore flag
 		Lpurl:           r.FormValue("url"),
-		Cookie:          cookie,
+		Cookie:          cookie, // visitor cookie id
 		Referer:         common.Trunc500(r.Header.Get("Referer")),
 		Host:            r.Host,
 		RemoteAddr:      r.RemoteAddr,
@@ -348,7 +365,7 @@ func AdWordsTrackingHandler(w http.ResponseWriter, r *http.Request) {
 		City:            r.Header.Get("X-AppEngine-City"),
 		Lat:             lat,
 		Lon:             lon,
-		AcceptLanguage:  r.Header.Get("Accept-Language"),
+		AcceptLanguage:  r.Header.Get("Accept-Language"), // browser locale
 		UserAgent:       r.Header.Get("User-Agent"),
 		IsMobile:        ua.Mobile(),
 		IsBot:           ua.Bot(),

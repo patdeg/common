@@ -25,6 +25,7 @@ var streamDataFn = gcp.StreamDataInBigquery
 func insertWithTableCreation(c context.Context, projectID, datasetID, tableID string, req *bigquery.TableDataInsertAllRequest, createTable func(context.Context, string) error) error {
 	common.Debug("insertWithTableCreation dataset=%s table=%s", datasetID, tableID)
 	err := streamDataFn(c, projectID, datasetID, tableID, req)
+
 	if err != nil {
 		common.Error("Error while streaming data to BigQuery: %v", err)
 		// gerr is of type *googleapi.Error when the BigQuery API returns
@@ -37,6 +38,7 @@ func insertWithTableCreation(c context.Context, projectID, datasetID, tableID st
 				common.Error("Error creating table %s: %v", tableID, err2)
 				return err2
 			}
+
 			// Retry the insert after creating the table.
 			if err3 := streamDataFn(c, projectID, datasetID, tableID, req); err3 != nil {
 				common.Error("Error streaming to BigQuery after creating table: %v", err3)
