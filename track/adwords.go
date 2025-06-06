@@ -283,6 +283,11 @@ func AdWordsTrackingHandler(w http.ResponseWriter, r *http.Request) {
 
 	redirectUrl := r.FormValue("url")
 	common.Debug("Redirect URL: %v", redirectUrl)
+	if !common.IsValidHTTPURL(redirectUrl) {
+		common.Error("Invalid redirect URL: %v", redirectUrl)
+		http.Error(w, "Invalid redirect URL", http.StatusBadRequest)
+		return
+	}
 
 	ua := user_agent.New(r.Header.Get("User-Agent"))
 	engineName, engineversion := ua.Engine()

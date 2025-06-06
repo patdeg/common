@@ -76,3 +76,12 @@ The server listens on the port specified by the `PORT` variable (defaults to
 The project now validates redirect targets and uses AES‑GCM encryption for
 sensitive data.
 
+## App Engine Version
+
+The `gcp` package includes a `Version` helper that fetches the App Engine
+version ID from a request context. The function stores the major part of the
+version string in the exported `common.VERSION` variable and returns it. Call
+this helper during initialization so the application can log or act on the
+deployed version via `common.VERSION`.
+
+

@@ -9,7 +9,10 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
-// insertWithTableCreation streams data to BigQuery and creates the table if it doesn't exist.
+// insertWithTableCreation streams data to BigQuery and creates the table if it
+// does not exist. When the initial insert returns a 404 error, the provided
+// createTable callback is invoked to ensure the dataset and table exist before
+// retrying the insert.
 func insertWithTableCreation(c context.Context, projectID, datasetID, tableID string, req *bigquery.TableDataInsertAllRequest, createTable func(context.Context, string) error) error {
 	common.Debug("insertWithTableCreation dataset=%s table=%s", datasetID, tableID)
 	err := gcp.StreamDataInBigquery(c, projectID, datasetID, tableID, req)
