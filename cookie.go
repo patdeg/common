@@ -9,28 +9,42 @@ import (
 )
 
 type Visitor struct {
-	Key                   string `json:"key,omitempty"`
-	Cookie                string `json:"cookie,omitempty"`
-	Host                  string `json:"host,omitempty"`
-	CreatedTimestamp      string `json:"createdTimestamp,omitempty"`
-	CreatedIP             string `json:"createdIP,omitempty"`
-	CreatedReferer        string `json:"createdReferer,omitempty"`
-	CreatedCountry        string `json:"createdCountry,omitempty"`
-	CreatedRegion         string `json:"createdRegion,omitempty"`
-	CreatedCity           string `json:"createdCity,omitempty"`
-	CreatedUserAgent      string `json:"createdUserAgent,omitempty"`
-	CreatedIsMobile       bool   `json:"createdIsMobile,omitempty"`
-	CreatedIsBot          bool   `json:"createdIsBot,omitempty"`
+	// Key is the datastore key for the visitor and also the cookie value.
+	Key string `json:"key,omitempty"`
+	// Cookie stores the same ID to easily serialize the cookie value.
+	Cookie string `json:"cookie,omitempty"`
+	// Host is the host name seen when the cookie was issued.
+	Host string `json:"host,omitempty"`
+	// CreatedTimestamp records when the cookie was created.
+	CreatedTimestamp string `json:"createdTimestamp,omitempty"`
+	// CreatedIP contains the client IP address at creation time.
+	CreatedIP string `json:"createdIP,omitempty"`
+	// CreatedReferer holds the HTTP referer header.
+	CreatedReferer string `json:"createdReferer,omitempty"`
+	// Geolocation fields derived from App Engine headers.
+	CreatedCountry string `json:"createdCountry,omitempty"`
+	CreatedRegion  string `json:"createdRegion,omitempty"`
+	CreatedCity    string `json:"createdCity,omitempty"`
+	// CreatedUserAgent stores the raw user agent string.
+	CreatedUserAgent string `json:"createdUserAgent,omitempty"`
+	// CreatedIsMobile indicates whether the UA looked like a mobile device.
+	CreatedIsMobile bool `json:"createdIsMobile,omitempty"`
+	// CreatedIsBot indicates whether the UA was identified as a bot.
+	CreatedIsBot bool `json:"createdIsBot,omitempty"`
+	// Parsed user agent details.
 	CreatedMozillaVersion string `json:"createdMozillaVersion,omitempty"`
 	CreatedPlatform       string `json:"createdPlatform,omitempty"`
 	CreatedOS             string `json:"createdOS,omitempty"`
-	CreatedEngineName     string `json:"createdEngineName,omitempty"`
-	CreatedEngineVersion  string `json:"createdEngineVersion,omitempty"`
+	// Rendering engine details extracted from the UA string.
+	CreatedEngineName    string `json:"createdEngineName,omitempty"`
+	CreatedEngineVersion string `json:"createdEngineVersion,omitempty"`
+	// Browser details extracted from the UA string.
 	CreatedBrowserName    string `json:"createdBrowserName,omitempty"`
 	CreatedBrowserVersion string `json:"createdBrowserVersion,omitempty"`
 }
 
-// ClearCookie removes the visitor ID cookie from the client.
+// ClearCookie removes the visitor ID cookie from the client by sending an
+// expired cookie back to the browser.
 func ClearCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "ID",
@@ -41,7 +55,8 @@ func ClearCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DoesCookieExists reports whether the visitor ID cookie is present.
+// DoesCookieExists reports whether the request contains a non-empty visitor ID
+// cookie.
 func DoesCookieExists(r *http.Request) bool {
 	cookie, err := r.Cookie("ID")
 	if err != nil || cookie == nil || cookie.Value == "" {
@@ -50,7 +65,12 @@ func DoesCookieExists(r *http.Request) bool {
 	return true
 }
 
-// GetCookieID retrieves the visitor ID cookie or creates a new one if missing.
+// GetCookieID returns the visitor identifier stored in the `ID` cookie. If the
+// cookie is missing a new identifier is generated, stored on the client and
+// then returned. The cookie is set to Secure and HttpOnly so it is only sent
+// over HTTPS connections and cannot be read via JavaScript. For requests on
+// localhost the Domain attribute is left empty, otherwise it is set to the host
+// so subdomains share the same cookie.
 func GetCookieID(w http.ResponseWriter, r *http.Request) string {
 	Debug(">>>> GetCookieID")
 
@@ -72,10 +92,11 @@ func GetCookieID(w http.ResponseWriter, r *http.Request) string {
 			Path:     "/",
 			Expires:  time.Now().Add(time.Hour * 24 * 30),
 			HttpOnly: true,
-			Secure:   true,
+			Secure:   true, // only send the cookie over HTTPS
 			SameSite: http.SameSiteLaxMode,
 		}
 		if host != "localhost" && host != "127.0.0.1" {
+			// Set the domain so the cookie is shared across subdomains
 			ck.Domain = host
 		}
 		http.SetCookie(w, ck)
