@@ -1,4 +1,17 @@
-// Package ga provides Google Analytics helpers.
+// Package ga provides helpers for sending hits to Google Analytics using the
+// Measurement Protocol. The package exposes helper types and functions to
+// collect information from an HTTP request and transmit it to the GA endpoint.
+//
+// Basic usage:
+//
+//	event := ga.GetEvent(r) // build GAEvent from *http.Request
+//	ga.TrackGAPage(r.Context(), ga.PropertyID, event)
+//
+//	event.Category = "signup"
+//	event.Action = "click"
+//	ga.TrackGAEvent(r.Context(), ga.PropertyID, event)
+//
+// The PropertyID variable holds the default Google Analytics Tracking ID.
 package ga
 
 import (
@@ -20,62 +33,120 @@ var (
 )
 
 // https://developers.google.com/analytics/devguides/collection/protocol/v1/parameters
+// GAEvent contains Measurement Protocol parameters for a Google Analytics hit.
+// Each field corresponds to a query parameter in the protocol. Empty fields are
+// omitted when sending the hit.
 type GAEvent struct {
-	CampaignContent        string `json:"CampaignContent,omitempty"`
-	CustomDimension1       string `json:"CustomDimension1,omitempty"`
-	CustomDimension2       string `json:"CustomDimension2,omitempty"`
-	CustomDimension3       string `json:"CustomDimension3,omitempty"`
-	CustomDimension4       string `json:"CustomDimension4,omitempty"`
-	CustomDimension5       string `json:"CustomDimension5,omitempty"`
-	CustomDimension6       string `json:"CustomDimension6,omitempty"`
-	CustomDimension7       string `json:"CustomDimension7,omitempty"`
-	CustomDimension8       string `json:"CustomDimension8,omitempty"`
-	CustomDimension9       string `json:"CustomDimension9,omitempty"`
-	Guid                   string `json:"Guid,omitempty"`
-	UserId                 string `json:"UserId,omitempty"`
-	CampaignKeyword        string `json:"CampaignKeyword,omitempty"`
-	CampaignMedium         string `json:"CampaignMedium,omitempty"`
-	CustomMetric1          string `json:"CustomMetric1,omitempty"`
-	CustomMetric2          string `json:"CustomMetric2,omitempty"`
-	CustomMetric3          string `json:"CustomMetric3,omitempty"`
-	CustomMetric4          string `json:"CustomMetric4,omitempty"`
-	CustomMetric5          string `json:"CustomMetric5,omitempty"`
-	CustomMetric6          string `json:"CustomMetric6,omitempty"`
-	CustomMetric7          string `json:"CustomMetric7,omitempty"`
-	CustomMetric8          string `json:"CustomMetric8,omitempty"`
-	CustomMetric9          string `json:"CustomMetric9,omitempty"`
-	CampaignName           string `json:"CampaignName,omitempty"`
-	CampaignSource         string `json:"CampaignSource,omitempty"`
-	CurrencyCode           string `json:"CurrencyCode,omitempty"`
-	DocumentHostName       string `json:"DocumentHostName,omitempty"`
-	DocumentLocationURL    string `json:"DocumentLocationURL,omitempty"`
-	DocumentPath           string `json:"DocumentPath,omitempty"`
-	Referer                string `json:"Referer,omitempty"`
-	DocumentTitle          string `json:"DocumentTitle,omitempty"`
-	Action                 string `json:"Action,omitempty"`
-	Category               string `json:"Category,omitempty"`
-	Label                  string `json:"Label,omitempty"`
-	Value                  string `json:"Value,omitempty"`
-	ExceptionDescription   string `json:"ExceptionDescription,omitempty"`
-	IsExceptionFatal       string `json:"IsExceptionFatal,omitempty"`
-	GoogleAdWordsID        string `json:"GoogleAdWordsID,omitempty"`
-	ItemCode               string `json:"ItemCode,omitempty"`
-	ItemName               string `json:"ItemName,omitempty"`
-	ItemPrice              string `json:"ItemPrice,omitempty"`
-	ItemQuantity           string `json:"ItemQuantity,omitempty"`
-	ItemCategory           string `json:"ItemCategory,omitempty"`
-	SocialAction           string `json:"SocialAction,omitempty"`
-	SocialNetwork          string `json:"SocialNetwork,omitempty"`
-	SocialActionTarget     string `json:"SocialActionTarget,omitempty"`
+	// cc – Campaign Content parameter.
+	CampaignContent string `json:"CampaignContent,omitempty"`
+	// cd1 – Custom Dimension 1.
+	CustomDimension1 string `json:"CustomDimension1,omitempty"`
+	// cd2 – Custom Dimension 2.
+	CustomDimension2 string `json:"CustomDimension2,omitempty"`
+	// cd3 – Custom Dimension 3.
+	CustomDimension3 string `json:"CustomDimension3,omitempty"`
+	// cd4 – Custom Dimension 4.
+	CustomDimension4 string `json:"CustomDimension4,omitempty"`
+	// cd5 – Custom Dimension 5.
+	CustomDimension5 string `json:"CustomDimension5,omitempty"`
+	// cd6 – Custom Dimension 6.
+	CustomDimension6 string `json:"CustomDimension6,omitempty"`
+	// cd7 – Custom Dimension 7.
+	CustomDimension7 string `json:"CustomDimension7,omitempty"`
+	// cd8 – Custom Dimension 8.
+	CustomDimension8 string `json:"CustomDimension8,omitempty"`
+	// cd9 – Custom Dimension 9.
+	CustomDimension9 string `json:"CustomDimension9,omitempty"`
+	// cid – Client ID used to identify a visitor.
+	Guid string `json:"Guid,omitempty"`
+	// uid – User ID for logged in users.
+	UserId string `json:"UserId,omitempty"`
+	// ck – Campaign Keyword parameter.
+	CampaignKeyword string `json:"CampaignKeyword,omitempty"`
+	// cm – Campaign Medium parameter.
+	CampaignMedium string `json:"CampaignMedium,omitempty"`
+	// cm1 – Custom Metric 1.
+	CustomMetric1 string `json:"CustomMetric1,omitempty"`
+	// cm2 – Custom Metric 2.
+	CustomMetric2 string `json:"CustomMetric2,omitempty"`
+	// cm3 – Custom Metric 3.
+	CustomMetric3 string `json:"CustomMetric3,omitempty"`
+	// cm4 – Custom Metric 4.
+	CustomMetric4 string `json:"CustomMetric4,omitempty"`
+	// cm5 – Custom Metric 5.
+	CustomMetric5 string `json:"CustomMetric5,omitempty"`
+	// cm6 – Custom Metric 6.
+	CustomMetric6 string `json:"CustomMetric6,omitempty"`
+	// cm7 – Custom Metric 7.
+	CustomMetric7 string `json:"CustomMetric7,omitempty"`
+	// cm8 – Custom Metric 8.
+	CustomMetric8 string `json:"CustomMetric8,omitempty"`
+	// cm9 – Custom Metric 9.
+	CustomMetric9 string `json:"CustomMetric9,omitempty"`
+	// cn – Campaign Name.
+	CampaignName string `json:"CampaignName,omitempty"`
+	// cs – Campaign Source.
+	CampaignSource string `json:"CampaignSource,omitempty"`
+	// cu – Currency Code (e.g. USD).
+	CurrencyCode string `json:"CurrencyCode,omitempty"`
+	// dh – Document Hostname.
+	DocumentHostName string `json:"DocumentHostName,omitempty"`
+	// dl – Document Location URL.
+	DocumentLocationURL string `json:"DocumentLocationURL,omitempty"`
+	// dp – Document Path.
+	DocumentPath string `json:"DocumentPath,omitempty"`
+	// dr – HTTP Referer header.
+	Referer string `json:"Referer,omitempty"`
+	// dt – Document Title.
+	DocumentTitle string `json:"DocumentTitle,omitempty"`
+	// ea – Event Action parameter.
+	Action string `json:"Action,omitempty"`
+	// ec – Event Category parameter.
+	Category string `json:"Category,omitempty"`
+	// el – Event Label parameter.
+	Label string `json:"Label,omitempty"`
+	// ev – Event Value parameter.
+	Value string `json:"Value,omitempty"`
+	// exd – Exception description.
+	ExceptionDescription string `json:"ExceptionDescription,omitempty"`
+	// exf – 1 for fatal exceptions.
+	IsExceptionFatal string `json:"IsExceptionFatal,omitempty"`
+	// gclid – Google AdWords ID.
+	GoogleAdWordsID string `json:"GoogleAdWordsID,omitempty"`
+	// ic – Item Code.
+	ItemCode string `json:"ItemCode,omitempty"`
+	// in – Item Name.
+	ItemName string `json:"ItemName,omitempty"`
+	// ip – Item Price.
+	ItemPrice string `json:"ItemPrice,omitempty"`
+	// iq – Item Quantity.
+	ItemQuantity string `json:"ItemQuantity,omitempty"`
+	// iv – Item Category.
+	ItemCategory string `json:"ItemCategory,omitempty"`
+	// sa – Social Action.
+	SocialAction string `json:"SocialAction,omitempty"`
+	// sn – Social Network.
+	SocialNetwork string `json:"SocialNetwork,omitempty"`
+	// st – Social Action Target.
+	SocialActionTarget string `json:"SocialActionTarget,omitempty"`
+	// ta – Transaction Affiliation.
 	TransactionAffiliation string `json:"TransactionAffiliation,omitempty"`
-	TransactionID          string `json:"TransactionID,omitempty"`
-	TransactionShipping    string `json:"TransactionShipping,omitempty"`
-	TransactionTax         string `json:"TransactionTax,omitempty"`
-	Agent                  string `json:"Agent,omitempty"`
-	IP                     string `json:"IP,omitempty"`
-	UserLanguage           string `json:"UserLanguage,omitempty"`
-	ExperimentID           string `json:"ExperimentID,omitempty"`
-	ExperimentVariant      string `json:"ExperimentVariant,omitempty"`
+	// ti – Transaction ID.
+	TransactionID string `json:"TransactionID,omitempty"`
+	// ts – Transaction Shipping.
+	TransactionShipping string `json:"TransactionShipping,omitempty"`
+	// tt – Transaction Tax.
+	TransactionTax string `json:"TransactionTax,omitempty"`
+	// ua – User Agent string.
+	Agent string `json:"Agent,omitempty"`
+	// uip – IP address of the user.
+	IP string `json:"IP,omitempty"`
+	// ul – User Language.
+	UserLanguage string `json:"UserLanguage,omitempty"`
+	// xid – Experiment ID.
+	ExperimentID string `json:"ExperimentID,omitempty"`
+	// xvar – Experiment Variant.
+	ExperimentVariant string `json:"ExperimentVariant,omitempty"`
 }
 
 func setIfNotEmpty(v *url.Values, key string, value string) {
@@ -148,6 +219,9 @@ func setEvent(etype string, event GAEvent) url.Values {
 	return v
 }
 
+// GetEvent populates a GAEvent from the HTTP request. It extracts common
+// information such as the visitor ID, IP address and referer that are often
+// included in Measurement Protocol hits.
 func GetEvent(r *http.Request) GAEvent {
 	guid := ""
 	cookie, err := r.Cookie("ID")
@@ -199,6 +273,13 @@ func GetEvent(r *http.Request) GAEvent {
 	return event
 }
 
+// TrackGAPage sends a pageview hit to Google Analytics. PropertyID represents
+// the GA tracking ID (tid) and event provides the parameters for the hit.
+//
+// Example:
+//
+//	event := ga.GetEvent(r)
+//	ga.TrackGAPage(r.Context(), ga.PropertyID, event)
 func TrackGAPage(c context.Context, PropertyID string, event GAEvent) {
 	endpointUrl := "https://www.google-analytics.com/collect?"
 	v := setEvent("pageview", event)
@@ -220,6 +301,15 @@ func TrackGAPage(c context.Context, PropertyID string, event GAEvent) {
 	Debug("GA status code %v", resp.StatusCode)
 }
 
+// TrackGAEvent sends an event hit to Google Analytics using the supplied
+// tracking ID and parameters.
+//
+// Example:
+//
+//	event := ga.GetEvent(r)
+//	event.Category = "signup"
+//	event.Action = "click"
+//	ga.TrackGAEvent(r.Context(), ga.PropertyID, event)
 func TrackGAEvent(c context.Context, PropertyID string, event GAEvent) {
 	endpointUrl := "https://www.google-analytics.com/collect?"
 	v := setEvent("event", event)
@@ -241,6 +331,9 @@ func TrackGAEvent(c context.Context, PropertyID string, event GAEvent) {
 	Debug("GA status code %v", resp.StatusCode)
 }
 
+// GATrackServeError renders an HTTP error response and records the failure as a
+// pageview in Google Analytics. If the error is fatal, a notification email is
+// also sent to AppEngineEmail.
 func GATrackServeError(w http.ResponseWriter, r *http.Request, PropertyID string,
 	errorTitle, errorMessage string, err error, code int, isFatal bool, AppEngineEmail string) {
 	c := r.Context()

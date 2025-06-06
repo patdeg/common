@@ -1,9 +1,15 @@
 package common
 
+// This file provides small cryptographic helpers used across the repository.
+//
+// MD5 and Hash return the MD5 checksum and CRC32 hash of a given string.
+// Encrypt and Decrypt perform authenticated encryption using AES-GCM.
+
 import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/md5"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"hash/crc32"
@@ -22,43 +28,61 @@ func Hash(data string) uint32 {
 	return crc32.ChecksumIEEE([]byte(data))
 }
 
-var commonIV = []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f}
+// Encrypt encrypts message using AES-GCM and returns a hex encoded nonce
+// followed by ciphertext.
 
 func Encrypt(c context.Context, key string, message string) string {
-	// Create the aes encryption algorithm
 	myKey := "yellow submarine" + key
-	ciph, err := aes.NewCipher([]byte(myKey[len(myKey)-16:]))
+	block, err := aes.NewCipher([]byte(myKey[len(myKey)-16:]))
 	if err != nil {
 		Error("Error NewCipher: %v", err)
 		return ""
 	}
-	// Encrypted string
-	cfb := cipher.NewCFBEncrypter(ciph, commonIV)
-	ciphertext := make([]byte, len(message))
-	cfb.XORKeyStream(ciphertext, []byte(message))
-	return hex.EncodeToString(ciphertext)
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		Error("Error NewGCM: %v", err)
+		return ""
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		Error("Error generating nonce: %v", err)
+		return ""
+	}
+	ciphertext := gcm.Seal(nil, nonce, []byte(message), nil)
+	out := append(nonce, ciphertext...)
+	return hex.EncodeToString(out)
 }
 
 func Decrypt(c context.Context, key string, message string) string {
 
-	// Create the aes encryption algorithm
 	myKey := "yellow submarine" + key
-	ciph, err := aes.NewCipher([]byte(myKey[len(myKey)-16:]))
+	block, err := aes.NewCipher([]byte(myKey[len(myKey)-16:]))
 	if err != nil {
 		Error("Error NewCipher: %v", err)
 		return ""
 	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		Error("Error NewGCM: %v", err)
+		return ""
+	}
 
-	messageByte, err := hex.DecodeString(message)
+	data, err := hex.DecodeString(message)
 	if err != nil {
 		Error("Error Decoding string: %v", err)
 		return ""
 	}
-
-	// Decrypt strings
-	cfbdec := cipher.NewCFBDecrypter(ciph, commonIV)
-	plaintext := make([]byte, len(messageByte))
-	cfbdec.XORKeyStream(plaintext, messageByte)
+	if len(data) < gcm.NonceSize() {
+		Error("Error: ciphertext too short")
+		return ""
+	}
+	nonce := data[:gcm.NonceSize()]
+	ciphertext := data[gcm.NonceSize():]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		Error("Error while decrypting: %v", err)
+		return ""
+	}
 	return string(plaintext)
 
 }
