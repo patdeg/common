@@ -1,3 +1,6 @@
+// Package track provides helpers for analytics collection. This file contains
+// HTTP handlers used by the tracking service. Handlers are provided to create
+// daily BigQuery tables, serve the tracking pixel and record outbound clicks.
 package track
 
 import (
@@ -16,6 +19,9 @@ func CreateTodayVisitsTableInBigQueryHandler(w http.ResponseWriter, r *http.Requ
 
 	isAdmin := user.IsAdmin(c)
 
+	// Only allow scheduled cron jobs or authenticated administrators to
+	// create the table. The X-AppEngine-Cron header is set by App Engine
+	// when a cron task invokes the handler.
 	if (r.Header.Get("X-AppEngine-Cron") != "true") && (isAdmin == false) {
 		common.Error("Handler called without admin/cron privilege")
 		http.Error(w, "Handler called without admin/cron privilege", http.StatusBadRequest)
@@ -39,6 +45,8 @@ func CreateTomorrowVisitsTableInBigQueryHandler(w http.ResponseWriter, r *http.R
 
 	isAdmin := user.IsAdmin(c)
 
+	// Protected endpoint: only cron or admin users may create tomorrow's table.
+	// App Engine sets the X-AppEngine-Cron header for scheduled tasks.
 	if (r.Header.Get("X-AppEngine-Cron") != "true") && (isAdmin == false) {
 		common.Error("Handler called without admin/cron privilege")
 		http.Error(w, "Handler called without admin/cron privilege", http.StatusBadRequest)
@@ -62,6 +70,8 @@ func CreateTodayEventsTableInBigQueryHandler(w http.ResponseWriter, r *http.Requ
 
 	isAdmin := user.IsAdmin(c)
 
+	// Only accessible to cron jobs or admin users to prevent unauthorized
+	// creation of event tables.
 	if (r.Header.Get("X-AppEngine-Cron") != "true") && (isAdmin == false) {
 		common.Error("Handler called without admin/cron privilege")
 		http.Error(w, "Handler called without admin/cron privilege", http.StatusBadRequest)
@@ -85,6 +95,7 @@ func CreateTomorrowEventsTableInBigQueryHandler(w http.ResponseWriter, r *http.R
 
 	isAdmin := user.IsAdmin(c)
 
+	// Only cron or admin users are permitted to create tomorrow's events table.
 	if (r.Header.Get("X-AppEngine-Cron") != "true") && (isAdmin == false) {
 		common.Error("Handler called without admin/cron privilege")
 		http.Error(w, "Handler called without admin/cron privilege", http.StatusBadRequest)
@@ -107,9 +118,15 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 
 	common.Info("c=%v a=%v l=%v v=%v", r.FormValue("c"), r.FormValue("a"), r.FormValue("l"), r.FormValue("v"))
 	TrackEvent(w, r, common.GetCookieID(w, r))
+	// The pixel response must look like an image and must not be cached by
+	// the browser. A permissive CORS header allows the pixel to be embedded
+	// from any origin.
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Add("Access-Control-Allow-Origin", "*")
+
+	// onePixelPNG is a 1x1 transparent PNG defined in base.go. Writing it
+	// triggers the image load that records the tracking event.
 	w.Write([]byte(onePixelPNG))
 }
 
@@ -119,7 +136,9 @@ func ClickHandler(w http.ResponseWriter, r *http.Request) {
 	common.Info("c=%v a=%v l=%v v=%v", r.FormValue("c"), r.FormValue("a"), r.FormValue("l"), r.FormValue("v"))
 	TrackEvent(w, r, common.GetCookieID(w, r))
 	url := r.FormValue("url")
-	if url == "" {
+	// Validate the destination to avoid redirecting to arbitrary schemes.
+	// Fallback to the site homepage when the URL is empty or invalid.
+	if !common.IsValidHTTPURL(url) {
 		url = "http://www.mygotome.com"
 	}
 	common.Info("Redirect to %v", url)
