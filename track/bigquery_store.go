@@ -10,6 +10,8 @@ import (
 	bigquery "google.golang.org/api/bigquery/v2"
 )
 
+// StoreVisitInBigQuery streams a Visit to BigQuery. If the target table does
+// not exist, it will be created and the insert retried once.
 func StoreVisitInBigQuery(c context.Context, v *Visit) error {
 	common.Info(">>>> StoreVisitInBigQuery")
 	common.Debug("Dataset=%s", visitsDataset)
@@ -59,6 +61,8 @@ func StoreVisitInBigQuery(c context.Context, v *Visit) error {
 	return insertWithTableCreation(c, bqProjectID, visitsDataset, tableName, req, createVisitsTableInBigQuery)
 }
 
+// StoreEventInBigQuery streams an Event visit to BigQuery. The dataset and
+// table are automatically created if necessary and the insert retried once.
 func StoreEventInBigQuery(c context.Context, v *Visit) error {
 	common.Info(">>>> StoreEventInBigQuery")
 	common.Debug("Dataset=%s", eventsDataset)
