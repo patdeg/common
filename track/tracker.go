@@ -1,5 +1,21 @@
 package track
 
+// This file contains the core tracking logic used by the handlers in this
+// package. The workflow is the same for visits, events and robots:
+//   1. Extract information from the incoming *http.Request* such as the user
+//      agent, geolocation headers and referrer.
+//   2. Use memcache to deduplicate sessions so repeated requests from the same
+//      visitor within a short window are ignored.
+//   3. Build a *Visit* or *RobotPage* structure and store it in BigQuery or
+//      Datastore.
+//   4. Event tracking runs in a background goroutine to avoid blocking the HTTP
+//      response. The goroutine uses a context derived from the request so the
+//      App Engine APIs continue to function after the handler returns.
+//
+// Memcache keys include the cookie value or a hash of the remote address and
+// user agent. Entries expire after 30 minutes which acts as a simple session
+// window.
+
 import (
 	"context"
 	"fmt"
@@ -17,8 +33,13 @@ import (
 )
 
 func TrackVisit(w http.ResponseWriter, r *http.Request, cookie string) {
+	// Use the request context for all App Engine operations
 	c := r.Context()
 	common.Info(">>>> TrackVisit")
+
+	// Check if we already recorded a visit for this cookie recently.
+	// The entry is stored with a short expiration so repeated page
+	// loads within the window are ignored.
 
 	if _, err := memcache.Get(c, "visit-"+cookie); err == memcache.ErrCacheMiss {
 		common.Info("Cookie not in memcache")
@@ -29,20 +50,25 @@ func TrackVisit(w http.ResponseWriter, r *http.Request, cookie string) {
 		return
 	}
 
+	// Parse the user agent to gather browser and device information
 	ua := user_agent.New(r.Header.Get("User-Agent"))
 	engineName, engineversion := ua.Engine()
 	browserName, browserVersion := ua.Browser()
 
+	// Ignore bot traffic early
 	if common.IsBot(r.Header.Get("User-Agent")) {
 		common.Info("TrackVisit: Events from Bots, ignoring")
 		return
 	}
 
+	// Country "ZZ" is used by App Engine when the origin is unknown and
+	// usually indicates bot activity.
 	if r.Header.Get("X-AppEngine-Country") == "ZZ" {
 		common.Info("TrackVisit: Country is ZZ - most likely a bot, ignoring")
 		return
 	}
 
+	// Extract location information if provided by App Engine headers
 	lat := float64(0)
 	lon := float64(0)
 	latlon := strings.Split(r.Header.Get("X-AppEngine-CityLatLong"), ",")
@@ -51,6 +77,9 @@ func TrackVisit(w http.ResponseWriter, r *http.Request, cookie string) {
 		lon = common.S2F(latlon[1])
 	}
 
+	// Lookup the current session in memcache.  If none exists, create a new
+	// session identifier and store it with a 30 minute expiration so any
+	// subsequent calls will reuse the same session value.
 	session := ""
 	item, err := memcache.Get(c, "session-"+cookie)
 	if err != nil {
@@ -108,6 +137,9 @@ func TrackVisit(w http.ResponseWriter, r *http.Request, cookie string) {
 	}
 }
 
+// TrackEventDetails records a custom event. The work runs asynchronously in a
+// goroutine so it does not delay the HTTP response. A context derived from the
+// request is passed to App Engine services used inside the goroutine.
 func TrackEventDetails(w http.ResponseWriter, r *http.Request, cookie, category, action, label string, value float64) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -124,15 +156,18 @@ func TrackEventDetails(w http.ResponseWriter, r *http.Request, cookie, category,
 		c := ctx
 		common.Info(">>>> TrackEventDetails")
 
+		// Parse user agent information
 		ua := user_agent.New(reqCopy.Header.Get("User-Agent"))
 		engineName, engineversion := ua.Engine()
 		browserName, browserVersion := ua.Browser()
 
+		// Ignore bot traffic early
 		if common.IsBot(reqCopy.Header.Get("User-Agent")) {
 			common.Info("TrackEventDetails: Events from Bots, ignoring")
 			return
 		}
 
+		// Extract location information if present
 		lat := float64(0)
 		lon := float64(0)
 		latlon := strings.Split(reqCopy.Header.Get("X-AppEngine-CityLatLong"), ",")
@@ -141,6 +176,9 @@ func TrackEventDetails(w http.ResponseWriter, r *http.Request, cookie, category,
 			lon = common.S2F(latlon[1])
 		}
 
+		// Use memcache to deduplicate events. The key is based on a hash
+		// of the remote address and user agent to approximate a visitor
+		// session.
 		uniqueId := common.MD5(reqCopy.RemoteAddr + reqCopy.Header.Get("User-Agent"))
 		session := ""
 		item, err := memcache.Get(c, "s-"+uniqueId)
@@ -162,6 +200,7 @@ func TrackEventDetails(w http.ResponseWriter, r *http.Request, cookie, category,
 		}
 		common.Info("TrackEventDetails: Unique Id = %v Session = %v", uniqueId, session)
 
+		// Build the event payload and send it to BigQuery
 		event := &Visit{
 			Cookie:         cookie,
 			Session:        session,
@@ -210,12 +249,15 @@ func TrackEvent(w http.ResponseWriter, r *http.Request, cookie string) {
 }
 
 func TrackRobots(r *http.Request) {
+	// Use the request context for datastore operations
 	c := r.Context()
 	common.Info(">>>> TrackRobots")
 
+	// Capture basic information about the crawling agent
 	userAgent := r.Header.Get("User-Agent")
 	ua := user_agent.New(r.Header.Get("User-Agent"))
 	botName, botVersion := ua.Browser()
+	// Build the RobotPage entry to persist
 	robotPage := RobotPage{
 		Time:       time.Now(),
 		URL:        r.URL.String(),
@@ -229,6 +271,7 @@ func TrackRobots(r *http.Request) {
 		BotName:    botName,
 		BotVersion: botVersion,
 	}
+	// Tag some well known bots for easier reporting
 	if strings.Contains(r.RequestURI, "_escaped_fragment_") {
 		robotPage.Name = "escaped_fragment"
 	}
