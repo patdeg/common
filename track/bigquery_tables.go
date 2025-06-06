@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/patdeg/common"
+	"github.com/patdeg/common/gcp"
 
 	"golang.org/x/net/context"
 	bigquery "google.golang.org/api/bigquery/v2"
@@ -12,7 +13,7 @@ import (
 func createVisitsTableInBigQuery(c context.Context, d string) error {
 	common.Info(">>>> createVisitsTableInBigQuery")
 
-	if err := common.CreateDatasetIfNotExists(c, bqProjectID, visitsDataset); err != nil {
+	if err := gcp.CreateDatasetIfNotExists(c, bqProjectID, visitsDataset); err != nil {
 		common.Error("Error ensuring dataset %s: %v", visitsDataset, err)
 		return err
 	}
@@ -59,13 +60,13 @@ func createVisitsTableInBigQuery(c context.Context, d string) error {
 			},
 		},
 	}
-	return common.CreateTableInBigQuery(c, newTable)
+	return gcp.CreateTableInBigQuery(c, newTable)
 }
 
 func createEventsTableInBigQuery(c context.Context, d string) error {
 	common.Info(">>>> createEventsTableInBigQuery")
 
-	if err := common.CreateDatasetIfNotExists(c, bqProjectID, eventsDataset); err != nil {
+	if err := gcp.CreateDatasetIfNotExists(c, bqProjectID, eventsDataset); err != nil {
 		common.Error("Error ensuring dataset %s: %v", eventsDataset, err)
 		return err
 	}
@@ -116,5 +117,5 @@ func createEventsTableInBigQuery(c context.Context, d string) error {
 			},
 		},
 	}
-	return common.CreateTableInBigQuery(c, newTable)
+	return gcp.CreateTableInBigQuery(c, newTable)
 }

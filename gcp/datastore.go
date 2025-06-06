@@ -1,4 +1,4 @@
-package common
+package gcp
 
 import (
 	"golang.org/x/net/context"

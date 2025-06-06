@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/patdeg/common"
+	"github.com/patdeg/common/gcp"
 
 	"github.com/mssola/user_agent"
 	"golang.org/x/net/context"
@@ -74,7 +75,7 @@ func createClicksTableInBigQuery(c context.Context, d string) error {
 
 	common.Info("Create a new daily clicks table in BigQuery")
 
-	if err := common.CreateDatasetIfNotExists(c, adwordsProjectID, adwordsDataset); err != nil {
+	if err := gcp.CreateDatasetIfNotExists(c, adwordsProjectID, adwordsDataset); err != nil {
 		common.Error("Error ensuring dataset %s: %v", adwordsDataset, err)
 		return err
 	}
@@ -144,7 +145,7 @@ func createClicksTableInBigQuery(c context.Context, d string) error {
 		},
 	}
 
-	return common.CreateTableInBigQuery(c, newTable)
+	return gcp.CreateTableInBigQuery(c, newTable)
 }
 
 // CreateTodayClicksTableInBigQueryHandler sets up today's clicks table in
