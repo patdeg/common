@@ -36,17 +36,17 @@ func DumpResponse(c context.Context, r *http.Response) {
 
 func DumpCookie(c context.Context, cookie *http.Cookie) {
 	if cookie != nil {
-		Info("Cookie:")
-		Info("  - Name: %v", cookie.Name)
-		Info("  - Value: %v", cookie.Value)
-		Info("  - Path: %v", cookie.Path)
-		Info("  - Domain: %v", cookie.Domain)
-		Info("  - Expires: %v", cookie.Expires)
-		Info("  - RawExpires: %v", cookie.RawExpires)
-		Info("  - MaxAge: %v", cookie.MaxAge)
-		Info("  - Secure:%v", cookie.Secure)
-		Info("  - HttpOnly: %v", cookie.HttpOnly)
-		Info("  - Raw: %v", cookie.Raw)
+		Debug("Cookie:")
+		Debug("  - Name: %v", cookie.Name)
+		Debug("  - Value: %v", cookie.Value)
+		Debug("  - Path: %v", cookie.Path)
+		Debug("  - Domain: %v", cookie.Domain)
+		Debug("  - Expires: %v", cookie.Expires)
+		Debug("  - RawExpires: %v", cookie.RawExpires)
+		Debug("  - MaxAge: %v", cookie.MaxAge)
+		Debug("  - Secure:%v", cookie.Secure)
+		Debug("  - HttpOnly: %v", cookie.HttpOnly)
+		Debug("  - Raw: %v", cookie.Raw)
 	} else {
 		Debug("Cookie is null")
 	}
