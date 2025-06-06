@@ -3,27 +3,31 @@
 This repository contains small helper packages used in personal projects. Below is a high level description of each source file so that a GenAI agent can understand how they fit together.
 
 ## Root package (`common`)
-- **appengine.go** – extracts the App Engine version from the request context and stores it in the `VERSION` variable defined in `common.go`.
-- **bigquery.go** – helpers to authenticate with BigQuery, create datasets/tables and stream rows.
 - **common.go** – declares shared variables such as `ISDEBUG` and `VERSION`.
 - **convert.go** – miscellaneous conversion utilities (string/number conversions, rounding, camel case, etc.).
 - **convert_test.go** – tests for `CamelCase` from `convert.go`.
 - **cookie.go** – visitor cookie helpers (create, read, clear) and `Visitor` struct.
 - **cookie_test.go** – tests cookie creation and attributes.
 - **crypt.go** – MD5 and CRC32 helpers plus AES based `Encrypt`/`Decrypt` functions.
-- **datastore.go** – helper to fetch the first datastore entity in a query.
 - **debug.go** – utilities for dumping HTTP requests, responses and cookies for debugging.
 - **file.go** – reads file contents.
-- **ga.go** – Google Analytics tracking helpers and structures for events.
 - **interfaces.go** – generic routines to marshal/unmarshal JSON/XML and manage HTTP bodies.
 - **logging.go** – simple Debug/Info/Error logging that respects `ISDEBUG`.
-- **memcache.go** – wrappers for App Engine memcache operations on bytes and objects.
 - **slice.go** – slice helper routines like `AddIfNotExists`.
 - **url.go** – validation helper for HTTP/HTTPS URLs.
 - **url_test.go** – tests for `url.go`.
+- **web.go** – assorted web utilities: service account HTTP client, spam/bot detection, and helper HTML template rendering.
+
+## `gcp` package
+- **appengine.go** – extracts the App Engine version and sets the `VERSION` variable.
+- **bigquery.go** – helpers to authenticate with BigQuery, create datasets/tables and stream rows.
+- **datastore.go** – helper to fetch the first datastore entity in a query.
+- **memcache.go** – wrappers for App Engine memcache operations on bytes and objects.
 - **user.go** – datastore storage of users and roles.
 - **user_test.go** – tests `EnsureUserExists` and `GetUserRole`.
-- **web.go** – assorted web utilities: service account HTTP client, spam/bot detection, and helper HTML template rendering.
+
+## `ga` package
+- **ga.go** – Google Analytics tracking helpers and structures for events.
 
 These files depend on each other via the exported helpers. For example `web.go` uses `memcache`, `logging` and `convert`; BigQuery functions log via `logging.go` and use utilities from `crypt.go` and `convert.go`.
 

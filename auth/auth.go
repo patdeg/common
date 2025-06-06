@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/patdeg/common"
+	"github.com/patdeg/common/gcp"
 	"github.com/patdeg/common/track"
 
 	"golang.org/x/net/context"
@@ -112,10 +113,10 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	if adminEmails[email] {
 		role = "admin"
 	}
-	if _, err := common.EnsureUserExists(ctx, email, role); err != nil {
+	if _, err := gcp.EnsureUserExists(ctx, email, role); err != nil {
 		common.Error("EnsureUserExists: %v", err)
 	}
-	storedRole, err := common.GetUserRole(ctx, email)
+	storedRole, err := gcp.GetUserRole(ctx, email)
 	if err != nil {
 		common.Error("GetUserRole: %v", err)
 		http.Redirect(w, r, "/", http.StatusFound)

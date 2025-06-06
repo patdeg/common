@@ -1,5 +1,5 @@
-// Package common provides shared helpers used across the mygoto.me service.
-package common
+// Package gcp provides Google Cloud helpers for mygoto.me service.
+package gcp
 
 import (
 	"errors"
