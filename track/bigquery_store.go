@@ -33,11 +33,8 @@ import (
 // The insertId combines the current timestamp in nanoseconds with the visitor
 // cookie to ensure uniqueness and allow de-duplication on retries.
 // Each Visit field is mapped directly to a column in BigQuery.
-func StoreVisitInBigQuery(c context.Context, v *Visit) error {
-	common.Info(">>>> StoreVisitInBigQuery")
-	common.Debug("Dataset=%s", visitsDataset)
-
-	insertId := strconv.FormatInt(time.Now().UnixNano(), 10) + "-" + v.Cookie
+func visitInsertRequest(v *Visit, now time.Time) *bigquery.TableDataInsertAllRequest {
+	insertId := strconv.FormatInt(now.UnixNano(), 10) + "-" + v.Cookie
 
 	req := &bigquery.TableDataInsertAllRequest{
 		Kind: "bigquery#tableDataInsertAllRequest",
@@ -75,6 +72,8 @@ func StoreVisitInBigQuery(c context.Context, v *Visit) error {
 			},
 		},
 	}
+
+	return req
 }
 
 // eventInsertRequest extends visitInsertRequest with event specific fields

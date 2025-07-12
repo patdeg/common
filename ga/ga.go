@@ -36,6 +36,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/patdeg/common"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine/v2/mail"
 	"google.golang.org/appengine/v2/urlfetch"
@@ -245,7 +246,7 @@ func GetEvent(r *http.Request) GAEvent {
 		}
 	}
 	if guid == "" {
-		guid = Encrypt(r.Context(), "", MD5(r.RemoteAddr+r.Header.Get("User-Agent")))
+		guid = common.Encrypt(r.Context(), "", common.MD5(r.RemoteAddr+r.Header.Get("User-Agent")))
 	}
 
 	query := ""
@@ -299,20 +300,20 @@ func TrackGAPage(c context.Context, PropertyID string, event GAEvent) {
 	v := setEvent("pageview", event)
 	v.Set("tid", PropertyID)
 	payload_data := v.Encode()
-	Info("GA: Calling %v with %v", endpointUrl, payload_data)
+	common.Info("GA: Calling %v with %v", endpointUrl, payload_data)
 
 	req, err := http.NewRequest("POST", endpointUrl, bytes.NewBufferString(payload_data))
 	if err != nil {
-		Error("Error while tracking Google Analytics: %v", err)
+		common.Error("Error while tracking Google Analytics: %v", err)
 		return
 	}
 	resp, err := urlfetch.Client(c).Do(req)
 	if err != nil {
-		Error("Error while tracking Google Analytics: %v", err)
+		common.Error("Error while tracking Google Analytics: %v", err)
 		return
 	}
 
-	Debug("GA status code %v", resp.StatusCode)
+	common.Debug("GA status code %v", resp.StatusCode)
 }
 
 // TrackGAEvent sends an event hit to Google Analytics using the supplied
@@ -329,20 +330,20 @@ func TrackGAEvent(c context.Context, PropertyID string, event GAEvent) {
 	v := setEvent("event", event)
 	v.Set("tid", PropertyID)
 	payload_data := v.Encode()
-	Info("GA: Calling %v with %v", endpointUrl, payload_data)
+	common.Info("GA: Calling %v with %v", endpointUrl, payload_data)
 
 	req, err := http.NewRequest("POST", endpointUrl, bytes.NewBufferString(payload_data))
 	if err != nil {
-		Error("Error while tracking Google Analytics: %v", err)
+		common.Error("Error while tracking Google Analytics: %v", err)
 		return
 	}
 	resp, err := urlfetch.Client(c).Do(req)
 	if err != nil {
-		Error("Error while tracking Google Analytics: %v", err)
+		common.Error("Error while tracking Google Analytics: %v", err)
 		return
 	}
 
-	Debug("GA status code %v", resp.StatusCode)
+	common.Debug("GA status code %v", resp.StatusCode)
 }
 
 // GATrackServeError renders an HTTP error response and records the failure as a
@@ -352,7 +353,7 @@ func GATrackServeError(w http.ResponseWriter, r *http.Request, PropertyID string
 	errorTitle, errorMessage string, err error, code int, isFatal bool, AppEngineEmail string) {
 	c := r.Context()
 	if err != nil {
-		Error("%v: %v", errorMessage, err.Error())
+		common.Error("%v: %v", errorMessage, err.Error())
 	}
 	event := GetEvent(r)
 	event.ExceptionDescription = errorMessage
@@ -368,7 +369,7 @@ func GATrackServeError(w http.ResponseWriter, r *http.Request, PropertyID string
 			Body:    fmt.Sprintf(`There was a fatal error on %v at %v: %v`, r.Host, time.Now(), errorMessage),
 		}
 		if err := mail.Send(c, msg); err != nil {
-			Error("Couldn't send error email: %v", err)
+			common.Error("Couldn't send error email: %v", err)
 		}
 	} else {
 		event.IsExceptionFatal = ""

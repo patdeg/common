@@ -28,7 +28,7 @@ import (
 func TestInsertWithTableCreation404(t *testing.T) {
 	ctx := context.Background()
 	called := 0
-	streamData = func(context.Context, string, string, string, *bigquery.TableDataInsertAllRequest) error {
+	streamDataFn = func(context.Context, string, string, string, *bigquery.TableDataInsertAllRequest) error {
 		called++
 		if called == 1 {
 			return &googleapi.Error{Code: 404}
@@ -52,7 +52,7 @@ func TestInsertWithTableCreation404(t *testing.T) {
 // TestInsertWithTableCreationError ensures non-404 errors are returned.
 func TestInsertWithTableCreationError(t *testing.T) {
 	ctx := context.Background()
-	streamData = func(context.Context, string, string, string, *bigquery.TableDataInsertAllRequest) error {
+	streamDataFn = func(context.Context, string, string, string, *bigquery.TableDataInsertAllRequest) error {
 		return errors.New("fail")
 	}
 	create := func(context.Context, string) error { t.Error("createTable should not be called"); return nil }
@@ -65,7 +65,7 @@ func TestInsertWithTableCreationError(t *testing.T) {
 func TestInsertWithTableCreationCreateError(t *testing.T) {
 	ctx := context.Background()
 	called := 0
-	streamData = func(context.Context, string, string, string, *bigquery.TableDataInsertAllRequest) error {
+	streamDataFn = func(context.Context, string, string, string, *bigquery.TableDataInsertAllRequest) error {
 		called++
 		return &googleapi.Error{Code: 404}
 	}
@@ -75,6 +75,8 @@ func TestInsertWithTableCreationCreateError(t *testing.T) {
 	}
 	if called != 1 {
 		t.Errorf("streamData called %d times, want 1", called)
+	}
+}
 
 // stubStreamer simulates StreamDataInBigquery behaviour.
 type stubStreamer struct {

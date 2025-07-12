@@ -17,9 +17,11 @@
 package gcp
 
 import (
+	"errors"
 	"time"
 
 	"golang.org/x/net/context"
+	appengine "google.golang.org/appengine/v2"
 	"google.golang.org/appengine/v2/datastore"
 )
 
@@ -36,6 +38,9 @@ type User struct {
 // exists but the role differs, the stored role is updated. The resulting user
 // entity is returned.
 func EnsureUserExists(c context.Context, email, role string) (*User, error) {
+	if !appengine.IsAppEngine() && !appengine.IsDevAppServer() {
+		return nil, errors.New("datastore unavailable")
+	}
 	key := datastore.NewKey(c, "User", email, 0, nil)
 	var u User
 	err := datastore.Get(c, key, &u)
@@ -61,6 +66,9 @@ func EnsureUserExists(c context.Context, email, role string) (*User, error) {
 // GetUserRole fetches and returns the role for the user with the given email.
 // It returns datastore.ErrNoSuchEntity if the user is not found.
 func GetUserRole(c context.Context, email string) (string, error) {
+	if !appengine.IsAppEngine() && !appengine.IsDevAppServer() {
+		return "", errors.New("datastore unavailable")
+	}
 	key := datastore.NewKey(c, "User", email, 0, nil)
 	var u User
 	if err := datastore.Get(c, key, &u); err != nil {
