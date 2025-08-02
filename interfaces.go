@@ -86,9 +86,20 @@ func WriteJSON(w http.ResponseWriter, d interface{}) error {
 	if err != nil {
 		return err
 	}
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, "%s", jsonData)
+	w.Header().Set("Content-Type", "application/json")	
+	_, err = w.Write(jsonData)
 	return nil
+}
+
+func WriteJSONWithStatus(w http.ResponseWriter, statusCode int, d interface{}) error {
+    jsonData, err := json.Marshal(d)
+    if err != nil {
+        return err
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(statusCode)
+    _, err = w.Write(jsonData)
+    return err
 }
 
 // ReadJSON unmarshals the JSON byte slice into the destination value.
