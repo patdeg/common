@@ -37,6 +37,12 @@ func Info(format string, v ...interface{}) {
 	log.Printf(format+"\n", v...)
 }
 
+// Warn writes a formatted warning message with an "WARNING:" prefix.
+// The prefix helps grep for warnings in log files.
+func Warn(format string, v ...interface{}) {
+	log.Printf("WARNING: "+format+"\n", v...)
+}
+
 // Error writes a formatted error message with an "ERROR:" prefix.
 // The prefix helps grep for errors in log files.
 func Error(format string, v ...interface{}) {
