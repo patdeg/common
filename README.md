@@ -1,87 +1,139 @@
-# common
+# Common Go Package
 
-Shared helpers for Go projects.
+[![Go Reference](https://pkg.go.dev/badge/github.com/patdeg/common.svg)](https://pkg.go.dev/github.com/patdeg/common)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-Use the root package:
+A comprehensive Go library providing reusable components for building scalable applications. This package offers production-ready utilities for authentication, data storage, payments, monitoring, and more.
 
+## 🚀 Features
+
+- **🔐 Authentication**: OAuth2, JWT, session management
+- **💾 Data Storage**: Datastore, BigQuery, caching abstractions
+- **💰 Payments**: Subscription management with multiple providers
+- **📧 Communications**: Email, SMS, and notification services
+- **🔍 Search**: Full-text search with faceting
+- **📊 Analytics**: Event tracking and metrics collection
+- **🏥 Monitoring**: Health checks and system metrics
+- **🎨 Frontend**: Asset management, templates, HTMX support
+- **🔒 Security**: RBAC, multi-tenancy, PII protection
+
+## 📦 Installation
+
+```bash
+go get github.com/patdeg/common
+```
+
+## 🛠️ Quick Start
+
+### Basic Usage
 ```go
 import "github.com/patdeg/common"
+
+// PII-safe logging
+common.InfoSafe("User logged in: %s", userEmail)
+
+// Type conversions
+num, err := common.StringToInt("123")
 ```
 
-Import subpackages, for example:
-
+### Data Storage
 ```go
-import "github.com/patdeg/common/auth"
+import "github.com/patdeg/common/datastore"
+
+repo, err := datastore.NewRepository(ctx)
+err = repo.Put(ctx, "User", key, user)
 ```
 
-You can also import specialized helpers:
+### Email Service
 ```go
-import "github.com/patdeg/common/gcp"
-import "github.com/patdeg/common/ga"
+import "github.com/patdeg/common/email"
+
+service, err := email.NewService(config)
+err = service.Send(ctx, message)
 ```
 
-## Environment Variables
+## 📚 Documentation
 
-The packages read several configuration values from environment variables:
+- [**Package Structure**](docs/PACKAGE_STRUCTURE.md) - Organization and architecture
+- [**API Reference**](docs/API_REFERENCE.md) - Complete API documentation
+- [**Security Audit**](docs/SECURITY_AUDIT.md) - Security verification for public repo
+- [**Examples**](examples/) - Working examples and tutorials
 
-- `BQ_PROJECT_ID`: Google Cloud project used for storing visit and event data.
-- `VISITS_DATASET`: BigQuery dataset name for visit tables.
-- `EVENTS_DATASET`: BigQuery dataset name for event tables.
-- `ADWORDS_PROJECT_ID`: Cloud project for AdWords click tracking.
-- `ADWORDS_DATASET`: BigQuery dataset for AdWords click tables.
-- `GOOGLE_OAUTH_CLIENT_ID`: OAuth client ID used by the auth package.
-- `GOOGLE_OAUTH_CLIENT_SECRET`: OAuth client secret.
-- `ADMIN_EMAILS`: comma-separated list of admin emails for login.
+## 🔒 Security Notice
 
-If a variable is unset, sensible defaults defined in the code will be used.
+⚠️ **This is a PUBLIC repository**:
+- ✅ No hardcoded credentials or secrets
+- ✅ PII-safe logging by default  
+- ✅ Input validation and sanitization
+- ✅ Example data only (example.com domains)
 
-## Running the Example
+## 🧪 Examples
 
-Set the required environment variables before starting the sample server:
+See the [examples](examples/) directory:
 
 ```bash
-export BQ_PROJECT_ID=your-gcp-project
-export VISITS_DATASET=visits
-export EVENTS_DATASET=events
-export ADWORDS_PROJECT_ID=your-gcp-project
-export ADWORDS_DATASET=adwords
-export GOOGLE_OAUTH_CLIENT_ID=xxxxx.apps.googleusercontent.com
-export GOOGLE_OAUTH_CLIENT_SECRET=your-secret
-export ADMIN_EMAILS=user@example.com
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service_account.json
+# Basic usage with local implementations
+cd examples/basic-usage && go run main.go
+
+# Complete App Engine application
+cd examples/appengine && go run main.go
 ```
 
-Run the App Engine example with:
+## 🔧 Environment Configuration
 
+The package automatically detects the environment and uses appropriate implementations:
+
+**Development** (default): Local/in-memory services
+**Production**: Cloud services (set `ENVIRONMENT=production`)
+
+### Core Variables
 ```bash
-go run ./examples/appengine
+# Authentication
+GOOGLE_OAUTH_CLIENT_ID=xxxxx.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=your-secret
+ADMIN_EMAILS=admin@example.com
+
+# Google Cloud
+PROJECT_ID=your-project-id
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+
+# Email
+SENDGRID_API_KEY=your-key
+FROM_EMAIL=noreply@example.com
 ```
 
-The server listens on the port specified by the `PORT` variable (defaults to
-`8080`).
+## 📈 Architecture
 
-## BigQuery and OAuth Configuration
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Application Layer                        │
+├─────────────────────────────────────────────────────────────┤
+│  Frontend │ API │ Search │ Monitor │ Import/Export          │
+├─────────────────────────────────────────────────────────────┤
+│              Business Logic Layer                            │
+├─────────────────────────────────────────────────────────────┤
+│     Tenant │ RBAC │ Payment │ Email │ Tasks                 │
+├─────────────────────────────────────────────────────────────┤
+│                Infrastructure Layer                          │
+├─────────────────────────────────────────────────────────────┤
+│   Datastore │ BigQuery │ Auth │ Cache │ Storage             │
+├─────────────────────────────────────────────────────────────┤
+│                   Core Utilities                             │
+├─────────────────────────────────────────────────────────────┤
+│  Logging │ Convert │ Crypto │ Files │ URLs │ Debug          │
+└─────────────────────────────────────────────────────────────┘
+```
 
-1. Create a Google Cloud project and enable the BigQuery API.
-2. Create datasets named `VISITS_DATASET`, `EVENTS_DATASET` and
-   `ADWORDS_DATASET` in the project identified by `BQ_PROJECT_ID`.
-3. Download a service account key and set `GOOGLE_APPLICATION_CREDENTIALS` to
-   the JSON file path.
-4. In the Cloud Console, create OAuth client credentials for a web application
-   and set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` to the
-   generated values.
+## 🤝 Contributing
 
-## Security Updates
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes (no sensitive data!)
+4. Push to the branch
+5. Open a Pull Request
 
-The project now validates redirect targets and uses AES‑GCM encryption for
-sensitive data.
+## 📝 License
 
-## App Engine Version
-
-The `gcp` package includes a `Version` helper that fetches the App Engine
-version ID from a request context. The function stores the major part of the
-version string in the exported `common.VERSION` variable and returns it. Call
-this helper during initialization so the application can log or act on the
-deployed version via `common.VERSION`.
+Apache License 2.0 - see [LICENSE](LICENSE) file for details.
 
 
