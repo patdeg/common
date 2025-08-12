@@ -70,6 +70,12 @@ func S2I(s string) int64 {
 	}
 }
 
+// S2B converts a string to a byte slice.
+// It returns the byte representation of the string.
+func S2B(s string) []byte {
+	return []byte(s)
+}
+
 // ToString converts a variety of primitive types to their string
 // representation. Supported types are int, int64, float64 and string. For any
 // other type fmt.Sprint is used. Nil values return an empty string.

@@ -93,17 +93,17 @@ type Manager interface {
 	UpdateRole(ctx context.Context, role *Role) error
 	DeleteRole(ctx context.Context, roleID string) error
 	ListRoles(ctx context.Context, tenantID string) ([]*Role, error)
-	
+
 	// User-Role assignment
 	AssignRole(ctx context.Context, userID, roleID, tenantID string) error
 	RevokeRole(ctx context.Context, userID, roleID, tenantID string) error
 	GetUserRoles(ctx context.Context, userID, tenantID string) ([]*Role, error)
 	HasRole(ctx context.Context, userID, roleID, tenantID string) bool
-	
+
 	// Permission checking
 	HasPermission(ctx context.Context, userID, resource, action, tenantID string) bool
 	GetUserPermissions(ctx context.Context, userID, tenantID string) ([]Permission, error)
-	
+
 	// Policy management
 	CreatePolicy(ctx context.Context, policy *Policy) error
 	GetPolicy(ctx context.Context, policyID string) (*Policy, error)
@@ -129,10 +129,10 @@ func NewManager() Manager {
 		policies:    make(map[string]*Policy),
 		permissions: make(map[string]*Permission),
 	}
-	
+
 	// Initialize with default roles
 	m.initializeDefaultRoles()
-	
+
 	return m
 }
 
@@ -151,7 +151,7 @@ func (m *DefaultManager) initializeDefaultRoles() {
 		UpdatedAt: time.Now(),
 	}
 	m.roles[adminRole.ID] = adminRole
-	
+
 	// User role
 	userRole := &Role{
 		ID:          "user",
@@ -166,7 +166,7 @@ func (m *DefaultManager) initializeDefaultRoles() {
 		UpdatedAt: time.Now(),
 	}
 	m.roles[userRole.ID] = userRole
-	
+
 	// Viewer role
 	viewerRole := &Role{
 		ID:          "viewer",
@@ -186,21 +186,21 @@ func (m *DefaultManager) initializeDefaultRoles() {
 func (m *DefaultManager) CreateRole(ctx context.Context, role *Role) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if role.ID == "" {
 		role.ID = fmt.Sprintf("role_%d", time.Now().UnixNano())
 	}
-	
+
 	if _, exists := m.roles[role.ID]; exists {
 		return fmt.Errorf("role already exists: %s", role.ID)
 	}
-	
+
 	now := time.Now()
 	role.CreatedAt = now
 	role.UpdatedAt = now
-	
+
 	m.roles[role.ID] = role
-	
+
 	common.Info("[RBAC] Created role: %s (%s)", role.ID, role.Name)
 	return nil
 }
@@ -209,12 +209,12 @@ func (m *DefaultManager) CreateRole(ctx context.Context, role *Role) error {
 func (m *DefaultManager) GetRole(ctx context.Context, roleID string) (*Role, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	role, exists := m.roles[roleID]
 	if !exists {
 		return nil, fmt.Errorf("role not found: %s", roleID)
 	}
-	
+
 	return role, nil
 }
 
@@ -222,19 +222,19 @@ func (m *DefaultManager) GetRole(ctx context.Context, roleID string) (*Role, err
 func (m *DefaultManager) UpdateRole(ctx context.Context, role *Role) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	existing, exists := m.roles[role.ID]
 	if !exists {
 		return fmt.Errorf("role not found: %s", role.ID)
 	}
-	
+
 	if existing.IsSystem {
 		return fmt.Errorf("cannot modify system role: %s", role.ID)
 	}
-	
+
 	role.UpdatedAt = time.Now()
 	m.roles[role.ID] = role
-	
+
 	common.Info("[RBAC] Updated role: %s", role.ID)
 	return nil
 }
@@ -243,16 +243,16 @@ func (m *DefaultManager) UpdateRole(ctx context.Context, role *Role) error {
 func (m *DefaultManager) DeleteRole(ctx context.Context, roleID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	role, exists := m.roles[roleID]
 	if !exists {
 		return fmt.Errorf("role not found: %s", roleID)
 	}
-	
+
 	if role.IsSystem {
 		return fmt.Errorf("cannot delete system role: %s", roleID)
 	}
-	
+
 	// Remove all user assignments for this role
 	for userID, userRoles := range m.userRoles {
 		var filtered []*UserRole
@@ -263,9 +263,9 @@ func (m *DefaultManager) DeleteRole(ctx context.Context, roleID string) error {
 		}
 		m.userRoles[userID] = filtered
 	}
-	
+
 	delete(m.roles, roleID)
-	
+
 	common.Info("[RBAC] Deleted role: %s", roleID)
 	return nil
 }
@@ -274,14 +274,14 @@ func (m *DefaultManager) DeleteRole(ctx context.Context, roleID string) error {
 func (m *DefaultManager) ListRoles(ctx context.Context, tenantID string) ([]*Role, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	var roles []*Role
 	for _, role := range m.roles {
 		if role.TenantID == tenantID || role.TenantID == "" || role.IsSystem {
 			roles = append(roles, role)
 		}
 	}
-	
+
 	return roles, nil
 }
 
@@ -289,28 +289,28 @@ func (m *DefaultManager) ListRoles(ctx context.Context, tenantID string) ([]*Rol
 func (m *DefaultManager) AssignRole(ctx context.Context, userID, roleID, tenantID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Check if role exists
 	if _, exists := m.roles[roleID]; !exists {
 		return fmt.Errorf("role not found: %s", roleID)
 	}
-	
+
 	// Check if already assigned
 	for _, ur := range m.userRoles[userID] {
 		if ur.RoleID == roleID && ur.TenantID == tenantID {
 			return fmt.Errorf("role already assigned")
 		}
 	}
-	
+
 	userRole := &UserRole{
 		UserID:    userID,
 		RoleID:    roleID,
 		TenantID:  tenantID,
 		GrantedAt: time.Now(),
 	}
-	
+
 	m.userRoles[userID] = append(m.userRoles[userID], userRole)
-	
+
 	common.Info("[RBAC] Assigned role %s to user %s", roleID, userID)
 	return nil
 }
@@ -319,10 +319,10 @@ func (m *DefaultManager) AssignRole(ctx context.Context, userID, roleID, tenantI
 func (m *DefaultManager) RevokeRole(ctx context.Context, userID, roleID, tenantID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	var filtered []*UserRole
 	found := false
-	
+
 	for _, ur := range m.userRoles[userID] {
 		if ur.RoleID == roleID && ur.TenantID == tenantID {
 			found = true
@@ -330,13 +330,13 @@ func (m *DefaultManager) RevokeRole(ctx context.Context, userID, roleID, tenantI
 			filtered = append(filtered, ur)
 		}
 	}
-	
+
 	if !found {
 		return fmt.Errorf("role assignment not found")
 	}
-	
+
 	m.userRoles[userID] = filtered
-	
+
 	common.Info("[RBAC] Revoked role %s from user %s", roleID, userID)
 	return nil
 }
@@ -345,22 +345,22 @@ func (m *DefaultManager) RevokeRole(ctx context.Context, userID, roleID, tenantI
 func (m *DefaultManager) GetUserRoles(ctx context.Context, userID, tenantID string) ([]*Role, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	var roles []*Role
-	
+
 	for _, ur := range m.userRoles[userID] {
 		if ur.TenantID == tenantID {
 			// Check if not expired
 			if ur.ExpiresAt != nil && time.Now().After(*ur.ExpiresAt) {
 				continue
 			}
-			
+
 			if role, exists := m.roles[ur.RoleID]; exists {
 				roles = append(roles, role)
 			}
 		}
 	}
-	
+
 	return roles, nil
 }
 
@@ -368,7 +368,7 @@ func (m *DefaultManager) GetUserRoles(ctx context.Context, userID, tenantID stri
 func (m *DefaultManager) HasRole(ctx context.Context, userID, roleID, tenantID string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	for _, ur := range m.userRoles[userID] {
 		if ur.RoleID == roleID && ur.TenantID == tenantID {
 			// Check if not expired
@@ -378,7 +378,7 @@ func (m *DefaultManager) HasRole(ctx context.Context, userID, roleID, tenantID s
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -392,10 +392,10 @@ func (m *DefaultManager) HasPermission(ctx context.Context, userID, resource, ac
 	if effect == EffectAllow {
 		return true
 	}
-	
+
 	// Then check role-based permissions
 	roles, _ := m.GetUserRoles(ctx, userID, tenantID)
-	
+
 	for _, role := range roles {
 		for _, perm := range role.Permissions {
 			if matchesResource(perm.Resource, resource) && matchesAction(perm.Action, action) {
@@ -403,7 +403,7 @@ func (m *DefaultManager) HasPermission(ctx context.Context, userID, resource, ac
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -413,20 +413,20 @@ func (m *DefaultManager) GetUserPermissions(ctx context.Context, userID, tenantI
 	if err != nil {
 		return nil, err
 	}
-	
+
 	permMap := make(map[string]Permission)
-	
+
 	for _, role := range roles {
 		for _, perm := range role.Permissions {
 			permMap[perm.ID] = perm
 		}
 	}
-	
+
 	var permissions []Permission
 	for _, perm := range permMap {
 		permissions = append(permissions, perm)
 	}
-	
+
 	return permissions, nil
 }
 
@@ -434,17 +434,17 @@ func (m *DefaultManager) GetUserPermissions(ctx context.Context, userID, tenantI
 func (m *DefaultManager) CreatePolicy(ctx context.Context, policy *Policy) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if policy.ID == "" {
 		policy.ID = fmt.Sprintf("policy_%d", time.Now().UnixNano())
 	}
-	
+
 	if _, exists := m.policies[policy.ID]; exists {
 		return fmt.Errorf("policy already exists: %s", policy.ID)
 	}
-	
+
 	m.policies[policy.ID] = policy
-	
+
 	common.Info("[RBAC] Created policy: %s (%s)", policy.ID, policy.Name)
 	return nil
 }
@@ -453,12 +453,12 @@ func (m *DefaultManager) CreatePolicy(ctx context.Context, policy *Policy) error
 func (m *DefaultManager) GetPolicy(ctx context.Context, policyID string) (*Policy, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	policy, exists := m.policies[policyID]
 	if !exists {
 		return nil, fmt.Errorf("policy not found: %s", policyID)
 	}
-	
+
 	return policy, nil
 }
 
@@ -466,13 +466,13 @@ func (m *DefaultManager) GetPolicy(ctx context.Context, policyID string) (*Polic
 func (m *DefaultManager) UpdatePolicy(ctx context.Context, policy *Policy) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if _, exists := m.policies[policy.ID]; !exists {
 		return fmt.Errorf("policy not found: %s", policy.ID)
 	}
-	
+
 	m.policies[policy.ID] = policy
-	
+
 	common.Info("[RBAC] Updated policy: %s", policy.ID)
 	return nil
 }
@@ -481,13 +481,13 @@ func (m *DefaultManager) UpdatePolicy(ctx context.Context, policy *Policy) error
 func (m *DefaultManager) DeletePolicy(ctx context.Context, policyID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if _, exists := m.policies[policyID]; !exists {
 		return fmt.Errorf("policy not found: %s", policyID)
 	}
-	
+
 	delete(m.policies, policyID)
-	
+
 	common.Info("[RBAC] Deleted policy: %s", policyID)
 	return nil
 }
@@ -496,7 +496,7 @@ func (m *DefaultManager) DeletePolicy(ctx context.Context, policyID string) erro
 func (m *DefaultManager) EvaluatePolicy(ctx context.Context, userID, resource, action, tenantID string) Effect {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	// Get user's roles
 	var userRoleIDs []string
 	for _, ur := range m.userRoles[userID] {
@@ -504,21 +504,21 @@ func (m *DefaultManager) EvaluatePolicy(ctx context.Context, userID, resource, a
 			userRoleIDs = append(userRoleIDs, ur.RoleID)
 		}
 	}
-	
+
 	// Evaluate policies in priority order
 	var effect Effect
-	
+
 	for _, policy := range m.policies {
 		if !policy.Enabled || policy.TenantID != tenantID {
 			continue
 		}
-		
+
 		for _, rule := range policy.Rules {
 			// Check if rule applies to this resource and action
 			if !matchesResource(rule.Resource, resource) {
 				continue
 			}
-			
+
 			actionMatches := false
 			for _, a := range rule.Actions {
 				if matchesAction(a, action) {
@@ -529,7 +529,7 @@ func (m *DefaultManager) EvaluatePolicy(ctx context.Context, userID, resource, a
 			if !actionMatches {
 				continue
 			}
-			
+
 			// Check if rule applies to this user
 			principalMatches := false
 			for _, principal := range rule.Principals {
@@ -545,7 +545,7 @@ func (m *DefaultManager) EvaluatePolicy(ctx context.Context, userID, resource, a
 					}
 				}
 			}
-			
+
 			if principalMatches {
 				effect = rule.Effect
 				// Deny takes precedence
@@ -555,7 +555,7 @@ func (m *DefaultManager) EvaluatePolicy(ctx context.Context, userID, resource, a
 			}
 		}
 	}
-	
+
 	return effect
 }
 
@@ -585,11 +585,11 @@ func matchesAction(pattern, action string) bool {
 
 // StandardRoles provides standard role definitions
 var StandardRoles = struct {
-	Admin   string
-	User    string
-	Viewer  string
-	Editor  string
-	Owner   string
+	Admin  string
+	User   string
+	Viewer string
+	Editor string
+	Owner  string
 }{
 	Admin:  "admin",
 	User:   "user",

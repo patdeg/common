@@ -29,7 +29,7 @@ var (
 	// Global sanitizer instance
 	globalSanitizer *logging.LogSanitizer
 	sanitizerOnce   sync.Once
-	
+
 	// EnablePIIProtection controls whether PII sanitization is applied
 	EnablePIIProtection = true
 )
@@ -38,7 +38,7 @@ var (
 func initSanitizer() {
 	sanitizerOnce.Do(func() {
 		globalSanitizer = logging.NewLogSanitizer()
-		
+
 		// Configure based on environment
 		if os.Getenv("LOG_PII_PROTECTION") == "false" {
 			EnablePIIProtection = false
@@ -53,14 +53,14 @@ func DebugSafe(format string, v ...interface{}) {
 	if !ISDEBUG {
 		return
 	}
-	
+
 	initSanitizer()
-	
+
 	message := fmt.Sprintf(format, v...)
 	if EnablePIIProtection {
 		message = globalSanitizer.Sanitize(message)
 	}
-	
+
 	// Use the original Debug function with sanitized message
 	Debug("%s", message)
 }
@@ -69,12 +69,12 @@ func DebugSafe(format string, v ...interface{}) {
 // This should be used instead of Info when the message might contain PII.
 func InfoSafe(format string, v ...interface{}) {
 	initSanitizer()
-	
+
 	message := fmt.Sprintf(format, v...)
 	if EnablePIIProtection {
 		message = globalSanitizer.Sanitize(message)
 	}
-	
+
 	// Use the original Info function with sanitized message
 	Info("%s", message)
 }
@@ -83,12 +83,12 @@ func InfoSafe(format string, v ...interface{}) {
 // This should be used instead of Warn when the message might contain PII.
 func WarnSafe(format string, v ...interface{}) {
 	initSanitizer()
-	
+
 	message := fmt.Sprintf(format, v...)
 	if EnablePIIProtection {
 		message = globalSanitizer.Sanitize(message)
 	}
-	
+
 	// Use the original Warn function with sanitized message
 	Warn("%s", message)
 }
@@ -97,12 +97,12 @@ func WarnSafe(format string, v ...interface{}) {
 // This should be used instead of Error when the message might contain PII.
 func ErrorSafe(format string, v ...interface{}) {
 	initSanitizer()
-	
+
 	message := fmt.Sprintf(format, v...)
 	if EnablePIIProtection {
 		message = globalSanitizer.Sanitize(message)
 	}
-	
+
 	// Use the original Error function with sanitized message
 	Error("%s", message)
 }
@@ -111,7 +111,7 @@ func ErrorSafe(format string, v ...interface{}) {
 // This can be used to sanitize messages before logging them.
 func SanitizeMessage(message string) string {
 	initSanitizer()
-	
+
 	if EnablePIIProtection {
 		return globalSanitizer.Sanitize(message)
 	}

@@ -76,28 +76,28 @@ func (am *AssetManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Remove URL prefix
 	path := strings.TrimPrefix(r.URL.Path, am.urlPrefix)
 	path = strings.TrimPrefix(path, "/")
-	
+
 	// Security check
 	if strings.Contains(path, "..") {
 		http.Error(w, "Invalid path", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Get or load asset
 	asset, err := am.getAsset(path)
 	if err != nil {
 		http.Error(w, "Asset not found", http.StatusNotFound)
 		return
 	}
-	
+
 	// Set headers
 	w.Header().Set("Content-Type", asset.ContentType)
-	
+
 	if !am.development {
 		// Production caching
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		w.Header().Set("ETag", asset.Hash)
-		
+
 		// Check if-none-match
 		if r.Header.Get("If-None-Match") == asset.Hash {
 			w.WriteHeader(http.StatusNotModified)
@@ -107,7 +107,7 @@ func (am *AssetManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Development - no caching
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	}
-	
+
 	// Serve content
 	w.Write(asset.Content)
 }
@@ -123,26 +123,26 @@ func (am *AssetManager) getAsset(path string) (*Asset, error) {
 		}
 		am.mu.RUnlock()
 	}
-	
+
 	// Load from filesystem
 	fullPath := filepath.Join(am.basePath, path)
-	
+
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Calculate hash
 	hash := fmt.Sprintf("%x", md5.Sum(content))
-	
+
 	// Determine content type
 	contentType := getContentType(path)
-	
+
 	asset := &Asset{
 		Path:        path,
 		Content:     content,
@@ -150,7 +150,7 @@ func (am *AssetManager) getAsset(path string) (*Asset, error) {
 		Hash:        hash[:8], // Use first 8 chars of hash
 		ModTime:     info.ModTime(),
 	}
-	
+
 	// Cache in production
 	if !am.development {
 		am.mu.Lock()
@@ -158,7 +158,7 @@ func (am *AssetManager) getAsset(path string) (*Asset, error) {
 		am.hashCache[path] = asset.Hash
 		am.mu.Unlock()
 	}
-	
+
 	return asset, nil
 }
 
@@ -168,19 +168,19 @@ func (am *AssetManager) getAssetHash(path string) string {
 		// Always return current timestamp in development
 		return fmt.Sprintf("%d", time.Now().Unix())
 	}
-	
+
 	am.mu.RLock()
 	if hash, ok := am.hashCache[path]; ok {
 		am.mu.RUnlock()
 		return hash
 	}
 	am.mu.RUnlock()
-	
+
 	// Try to load asset to get hash
 	if asset, err := am.getAsset(path); err == nil {
 		return asset.Hash
 	}
-	
+
 	return ""
 }
 
@@ -244,7 +244,7 @@ func (tm *TemplateManager) Render(w io.Writer, name string, data interface{}) er
 	if err != nil {
 		return fmt.Errorf("failed to get template: %v", err)
 	}
-	
+
 	return tmpl.Execute(w, data)
 }
 
@@ -268,17 +268,17 @@ func (tm *TemplateManager) getTemplate(name string) (*template.Template, error) 
 		}
 		tm.mu.RUnlock()
 	}
-	
+
 	// Load template
 	tmplPath := filepath.Join(tm.basePath, name)
-	
+
 	tmpl, err := template.New(filepath.Base(name)).
 		Funcs(tm.funcMap).
 		ParseFiles(tmplPath)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Look for layout
 	layoutPath := filepath.Join(tm.basePath, "layout.html")
 	if _, err := os.Stat(layoutPath); err == nil {
@@ -287,14 +287,14 @@ func (tm *TemplateManager) getTemplate(name string) (*template.Template, error) 
 			return nil, err
 		}
 	}
-	
+
 	// Cache in production
 	if !tm.development {
 		tm.mu.Lock()
 		tm.cache[name] = tmpl
 		tm.mu.Unlock()
 	}
-	
+
 	return tmpl, nil
 }
 
@@ -311,7 +311,7 @@ func DefaultFuncMap() template.FuncMap {
 		"lower": strings.ToLower,
 		"title": strings.Title,
 		"trim":  strings.TrimSpace,
-		
+
 		// Date functions
 		"date": func(t time.Time) string {
 			return t.Format("2006-01-02")
@@ -332,7 +332,7 @@ func DefaultFuncMap() template.FuncMap {
 				return fmt.Sprintf("%d days ago", int(d.Hours()/24))
 			}
 		},
-		
+
 		// Formatting functions
 		"json": func(v interface{}) (string, error) {
 			b, err := json.Marshal(v)
@@ -344,24 +344,24 @@ func DefaultFuncMap() template.FuncMap {
 			}
 			return s[:n] + "..."
 		},
-		
+
 		// URL functions
 		"url": func(path string, params ...string) string {
 			if len(params) == 0 {
 				return path
 			}
-			
+
 			query := url.Values{}
 			for i := 0; i < len(params)-1; i += 2 {
 				query.Add(params[i], params[i+1])
 			}
-			
+
 			if strings.Contains(path, "?") {
 				return path + "&" + query.Encode()
 			}
 			return path + "?" + query.Encode()
 		},
-		
+
 		// Logic functions
 		"default": func(def, val interface{}) interface{} {
 			if val == nil || val == "" || val == 0 || val == false {
@@ -369,7 +369,7 @@ func DefaultFuncMap() template.FuncMap {
 			}
 			return val
 		},
-		"contains": strings.Contains,
+		"contains":  strings.Contains,
 		"hasPrefix": strings.HasPrefix,
 		"hasSuffix": strings.HasSuffix,
 	}
@@ -449,7 +449,7 @@ func (h *HTMXResponse) Write(content []byte) (int, error) {
 	for k, v := range h.headers {
 		h.w.Header().Set(k, v)
 	}
-	
+
 	// Write content
 	return h.w.Write(content)
 }

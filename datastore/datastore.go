@@ -31,16 +31,16 @@ import (
 type Repository interface {
 	// Get retrieves an entity by key
 	Get(ctx context.Context, kind string, key string, dest interface{}) error
-	
+
 	// Put saves an entity with the given key
 	Put(ctx context.Context, kind string, key string, src interface{}) error
-	
+
 	// Delete removes an entity by key
 	Delete(ctx context.Context, kind string, key string) error
-	
+
 	// Query executes a query and returns results
 	Query(ctx context.Context, query Query) ([]interface{}, error)
-	
+
 	// Transaction executes operations in a transaction
 	Transaction(ctx context.Context, fn func(tx Transaction) error) error
 }
@@ -93,7 +93,7 @@ func NewRepository(ctx context.Context) (Repository, error) {
 		common.Info("[DATASTORE] Initializing LocalRepository for development")
 		return NewLocalRepository(), nil
 	}
-	
+
 	common.Info("[DATASTORE] Initializing CloudRepository for production")
 	return NewCloudRepository(ctx)
 }
@@ -107,12 +107,12 @@ func NewCloudRepository(ctx context.Context) (*CloudRepository, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("PROJECT_ID not configured")
 	}
-	
+
 	client, err := datastore.NewClient(ctx, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create datastore client: %v", err)
 	}
-	
+
 	return &CloudRepository{
 		client:    client,
 		projectID: projectID,
@@ -134,13 +134,13 @@ func (r *CloudRepository) Get(ctx context.Context, kind string, key string, dest
 		// Type assertion and copy
 		return copyValue(cached, dest)
 	}
-	
+
 	k := datastore.NameKey(kind, key, nil)
 	err := r.client.Get(ctx, k, dest)
 	if err != nil {
 		return err
 	}
-	
+
 	// Cache the result
 	r.cache.Store(cacheKey, dest)
 	return nil
@@ -153,7 +153,7 @@ func (r *CloudRepository) Put(ctx context.Context, kind string, key string, src 
 	if err != nil {
 		return err
 	}
-	
+
 	// Update cache
 	cacheKey := fmt.Sprintf("%s:%s", kind, key)
 	r.cache.Store(cacheKey, src)
@@ -167,7 +167,7 @@ func (r *CloudRepository) Delete(ctx context.Context, kind string, key string) e
 	if err != nil {
 		return err
 	}
-	
+
 	// Remove from cache
 	cacheKey := fmt.Sprintf("%s:%s", kind, key)
 	r.cache.Delete(cacheKey)
@@ -177,12 +177,12 @@ func (r *CloudRepository) Delete(ctx context.Context, kind string, key string) e
 // Query executes a query on cloud datastore
 func (r *CloudRepository) Query(ctx context.Context, query Query) ([]interface{}, error) {
 	q := datastore.NewQuery(query.Kind)
-	
+
 	// Apply filters
 	for _, filter := range query.Filters {
 		q = q.Filter(fmt.Sprintf("%s %s", filter.Field, filter.Operator), filter.Value)
 	}
-	
+
 	// Apply ordering
 	for _, order := range query.Orders {
 		field := order.Field
@@ -191,7 +191,7 @@ func (r *CloudRepository) Query(ctx context.Context, query Query) ([]interface{}
 		}
 		q = q.Order(field)
 	}
-	
+
 	// Apply limit and offset
 	if query.Limit > 0 {
 		q = q.Limit(query.Limit)
@@ -199,7 +199,7 @@ func (r *CloudRepository) Query(ctx context.Context, query Query) ([]interface{}
 	if query.Offset > 0 {
 		q = q.Offset(query.Offset)
 	}
-	
+
 	var results []interface{}
 	_, err := r.client.GetAll(ctx, q, &results)
 	return results, err
@@ -238,17 +238,17 @@ func (t *cloudTransaction) Delete(kind string, key string) error {
 func (r *LocalRepository) Get(ctx context.Context, kind string, key string, dest interface{}) error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	kindData, ok := r.data[kind]
 	if !ok {
 		return fmt.Errorf("entity not found")
 	}
-	
+
 	entity, ok := kindData[key]
 	if !ok {
 		return fmt.Errorf("entity not found")
 	}
-	
+
 	return copyValue(entity, dest)
 }
 
@@ -256,11 +256,11 @@ func (r *LocalRepository) Get(ctx context.Context, kind string, key string, dest
 func (r *LocalRepository) Put(ctx context.Context, kind string, key string, src interface{}) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if r.data[kind] == nil {
 		r.data[kind] = make(map[string]interface{})
 	}
-	
+
 	// Store a copy to prevent external modifications
 	r.data[kind][key] = deepCopy(src)
 	return nil
@@ -270,7 +270,7 @@ func (r *LocalRepository) Put(ctx context.Context, kind string, key string, src 
 func (r *LocalRepository) Delete(ctx context.Context, kind string, key string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if kindData, ok := r.data[kind]; ok {
 		delete(kindData, key)
 	}
@@ -281,12 +281,12 @@ func (r *LocalRepository) Delete(ctx context.Context, kind string, key string) e
 func (r *LocalRepository) Query(ctx context.Context, query Query) ([]interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	kindData, ok := r.data[query.Kind]
 	if !ok {
 		return []interface{}{}, nil
 	}
-	
+
 	// Collect all entities
 	var results []interface{}
 	for _, entity := range kindData {
@@ -297,7 +297,7 @@ func (r *LocalRepository) Query(ctx context.Context, query Query) ([]interface{}
 			break
 		}
 	}
-	
+
 	return results, nil
 }
 

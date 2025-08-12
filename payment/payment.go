@@ -29,56 +29,56 @@ import (
 type Provider interface {
 	// CreateCustomer creates a new customer
 	CreateCustomer(ctx context.Context, customer *Customer) error
-	
+
 	// GetCustomer retrieves customer details
 	GetCustomer(ctx context.Context, customerID string) (*Customer, error)
-	
+
 	// UpdateCustomer updates customer information
 	UpdateCustomer(ctx context.Context, customer *Customer) error
-	
+
 	// CreateSubscription creates a new subscription
 	CreateSubscription(ctx context.Context, sub *Subscription) error
-	
+
 	// GetSubscription retrieves subscription details
 	GetSubscription(ctx context.Context, subscriptionID string) (*Subscription, error)
-	
+
 	// CancelSubscription cancels a subscription
 	CancelSubscription(ctx context.Context, subscriptionID string, immediately bool) error
-	
+
 	// UpdateSubscription updates subscription (e.g., change plan)
 	UpdateSubscription(ctx context.Context, sub *Subscription) error
-	
+
 	// CreatePaymentMethod adds a payment method
 	CreatePaymentMethod(ctx context.Context, method *PaymentMethod) error
-	
+
 	// ChargePayment processes a one-time payment
 	ChargePayment(ctx context.Context, charge *Charge) error
-	
+
 	// RefundPayment issues a refund
 	RefundPayment(ctx context.Context, refund *Refund) error
-	
+
 	// ListInvoices lists customer invoices
 	ListInvoices(ctx context.Context, customerID string, limit int) ([]*Invoice, error)
-	
+
 	// HandleWebhook processes provider webhooks
 	HandleWebhook(ctx context.Context, payload []byte, signature string) (*WebhookEvent, error)
 }
 
 // Customer represents a customer
 type Customer struct {
-	ID            string                 `json:"id"`
-	ProviderID    string                 `json:"provider_id"`
-	Email         string                 `json:"email"`
-	Name          string                 `json:"name"`
-	Company       string                 `json:"company,omitempty"`
-	Phone         string                 `json:"phone,omitempty"`
-	Address       *Address               `json:"address,omitempty"`
-	Metadata      map[string]string      `json:"metadata,omitempty"`
-	PaymentMethod *PaymentMethod         `json:"payment_method,omitempty"`
-	Balance       int64                  `json:"balance"` // In cents
-	Currency      string                 `json:"currency"`
-	CreatedAt     time.Time              `json:"created_at"`
-	UpdatedAt     time.Time              `json:"updated_at"`
+	ID            string            `json:"id"`
+	ProviderID    string            `json:"provider_id"`
+	Email         string            `json:"email"`
+	Name          string            `json:"name"`
+	Company       string            `json:"company,omitempty"`
+	Phone         string            `json:"phone,omitempty"`
+	Address       *Address          `json:"address,omitempty"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
+	PaymentMethod *PaymentMethod    `json:"payment_method,omitempty"`
+	Balance       int64             `json:"balance"` // In cents
+	Currency      string            `json:"currency"`
+	CreatedAt     time.Time         `json:"created_at"`
+	UpdatedAt     time.Time         `json:"updated_at"`
 }
 
 // Address represents a billing address
@@ -93,22 +93,22 @@ type Address struct {
 
 // Subscription represents a subscription
 type Subscription struct {
-	ID                string            `json:"id"`
-	ProviderID        string            `json:"provider_id"`
-	CustomerID        string            `json:"customer_id"`
-	PlanID            string            `json:"plan_id"`
-	Status            SubscriptionStatus `json:"status"`
-	Quantity          int               `json:"quantity"`
-	CurrentPeriodStart time.Time        `json:"current_period_start"`
-	CurrentPeriodEnd   time.Time        `json:"current_period_end"`
-	CancelAt          *time.Time        `json:"cancel_at,omitempty"`
-	CanceledAt        *time.Time        `json:"canceled_at,omitempty"`
-	TrialStart        *time.Time        `json:"trial_start,omitempty"`
-	TrialEnd          *time.Time        `json:"trial_end,omitempty"`
-	Metadata          map[string]string `json:"metadata,omitempty"`
-	Items             []SubscriptionItem `json:"items,omitempty"`
-	CreatedAt         time.Time         `json:"created_at"`
-	UpdatedAt         time.Time         `json:"updated_at"`
+	ID                 string             `json:"id"`
+	ProviderID         string             `json:"provider_id"`
+	CustomerID         string             `json:"customer_id"`
+	PlanID             string             `json:"plan_id"`
+	Status             SubscriptionStatus `json:"status"`
+	Quantity           int                `json:"quantity"`
+	CurrentPeriodStart time.Time          `json:"current_period_start"`
+	CurrentPeriodEnd   time.Time          `json:"current_period_end"`
+	CancelAt           *time.Time         `json:"cancel_at,omitempty"`
+	CanceledAt         *time.Time         `json:"canceled_at,omitempty"`
+	TrialStart         *time.Time         `json:"trial_start,omitempty"`
+	TrialEnd           *time.Time         `json:"trial_end,omitempty"`
+	Metadata           map[string]string  `json:"metadata,omitempty"`
+	Items              []SubscriptionItem `json:"items,omitempty"`
+	CreatedAt          time.Time          `json:"created_at"`
+	UpdatedAt          time.Time          `json:"updated_at"`
 }
 
 // SubscriptionStatus represents subscription status
@@ -149,10 +149,10 @@ type Plan struct {
 type BillingInterval string
 
 const (
-	IntervalMonthly  BillingInterval = "monthly"
-	IntervalYearly   BillingInterval = "yearly"
-	IntervalWeekly   BillingInterval = "weekly"
-	IntervalOneTime  BillingInterval = "one_time"
+	IntervalMonthly BillingInterval = "monthly"
+	IntervalYearly  BillingInterval = "yearly"
+	IntervalWeekly  BillingInterval = "weekly"
+	IntervalOneTime BillingInterval = "one_time"
 )
 
 // PaymentMethod represents a payment method
@@ -177,26 +177,26 @@ const (
 
 // CardDetails represents credit card details
 type CardDetails struct {
-	Brand      string `json:"brand"`
-	Last4      string `json:"last4"`
-	ExpMonth   int    `json:"exp_month"`
-	ExpYear    int    `json:"exp_year"`
+	Brand       string `json:"brand"`
+	Last4       string `json:"last4"`
+	ExpMonth    int    `json:"exp_month"`
+	ExpYear     int    `json:"exp_year"`
 	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
 // Charge represents a payment charge
 type Charge struct {
-	ID             string       `json:"id"`
-	ProviderID     string       `json:"provider_id"`
-	CustomerID     string       `json:"customer_id"`
-	Amount         int64        `json:"amount"` // In cents
-	Currency       string       `json:"currency"`
-	Description    string       `json:"description"`
-	Status         ChargeStatus `json:"status"`
-	PaymentMethod  string       `json:"payment_method"`
-	FailureMessage string       `json:"failure_message,omitempty"`
+	ID             string            `json:"id"`
+	ProviderID     string            `json:"provider_id"`
+	CustomerID     string            `json:"customer_id"`
+	Amount         int64             `json:"amount"` // In cents
+	Currency       string            `json:"currency"`
+	Description    string            `json:"description"`
+	Status         ChargeStatus      `json:"status"`
+	PaymentMethod  string            `json:"payment_method"`
+	FailureMessage string            `json:"failure_message,omitempty"`
 	Metadata       map[string]string `json:"metadata,omitempty"`
-	CreatedAt      time.Time    `json:"created_at"`
+	CreatedAt      time.Time         `json:"created_at"`
 }
 
 // ChargeStatus represents charge status
@@ -210,15 +210,15 @@ const (
 
 // Refund represents a refund
 type Refund struct {
-	ID         string       `json:"id"`
-	ProviderID string       `json:"provider_id"`
-	ChargeID   string       `json:"charge_id"`
-	Amount     int64        `json:"amount"` // In cents
-	Currency   string       `json:"currency"`
-	Reason     string       `json:"reason"`
-	Status     RefundStatus `json:"status"`
+	ID         string            `json:"id"`
+	ProviderID string            `json:"provider_id"`
+	ChargeID   string            `json:"charge_id"`
+	Amount     int64             `json:"amount"` // In cents
+	Currency   string            `json:"currency"`
+	Reason     string            `json:"reason"`
+	Status     RefundStatus      `json:"status"`
 	Metadata   map[string]string `json:"metadata,omitempty"`
-	CreatedAt  time.Time    `json:"created_at"`
+	CreatedAt  time.Time         `json:"created_at"`
 }
 
 // RefundStatus represents refund status
@@ -232,29 +232,29 @@ const (
 
 // Invoice represents an invoice
 type Invoice struct {
-	ID             string         `json:"id"`
-	ProviderID     string         `json:"provider_id"`
-	CustomerID     string         `json:"customer_id"`
-	SubscriptionID string         `json:"subscription_id,omitempty"`
-	Number         string         `json:"number"`
-	Status         InvoiceStatus  `json:"status"`
-	Amount         int64          `json:"amount"` // In cents
-	Currency       string         `json:"currency"`
-	DueDate        time.Time      `json:"due_date"`
-	PaidAt         *time.Time     `json:"paid_at,omitempty"`
-	Lines          []InvoiceLine  `json:"lines"`
-	PDFUrl         string         `json:"pdf_url,omitempty"`
-	CreatedAt      time.Time      `json:"created_at"`
+	ID             string        `json:"id"`
+	ProviderID     string        `json:"provider_id"`
+	CustomerID     string        `json:"customer_id"`
+	SubscriptionID string        `json:"subscription_id,omitempty"`
+	Number         string        `json:"number"`
+	Status         InvoiceStatus `json:"status"`
+	Amount         int64         `json:"amount"` // In cents
+	Currency       string        `json:"currency"`
+	DueDate        time.Time     `json:"due_date"`
+	PaidAt         *time.Time    `json:"paid_at,omitempty"`
+	Lines          []InvoiceLine `json:"lines"`
+	PDFUrl         string        `json:"pdf_url,omitempty"`
+	CreatedAt      time.Time     `json:"created_at"`
 }
 
 // InvoiceStatus represents invoice status
 type InvoiceStatus string
 
 const (
-	InvoiceDraft  InvoiceStatus = "draft"
-	InvoiceOpen   InvoiceStatus = "open"
-	InvoicePaid   InvoiceStatus = "paid"
-	InvoiceVoid   InvoiceStatus = "void"
+	InvoiceDraft         InvoiceStatus = "draft"
+	InvoiceOpen          InvoiceStatus = "open"
+	InvoicePaid          InvoiceStatus = "paid"
+	InvoiceVoid          InvoiceStatus = "void"
 	InvoiceUncollectible InvoiceStatus = "uncollectible"
 )
 
@@ -298,11 +298,11 @@ func (m *Manager) CreateCustomer(ctx context.Context, email, name string) (*Cust
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
+
 	if err := m.provider.CreateCustomer(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to create customer: %v", err)
 	}
-	
+
 	common.Info("[PAYMENT] Created customer: %s (%s)", customer.Email, customer.ID)
 	return customer, nil
 }
@@ -313,11 +313,11 @@ func (m *Manager) Subscribe(ctx context.Context, customerID, planID string) (*Su
 	m.mu.RLock()
 	plan, ok := m.plans[planID]
 	m.mu.RUnlock()
-	
+
 	if !ok {
 		return nil, fmt.Errorf("plan not found: %s", planID)
 	}
-	
+
 	sub := &Subscription{
 		CustomerID: customerID,
 		PlanID:     planID,
@@ -326,7 +326,7 @@ func (m *Manager) Subscribe(ctx context.Context, customerID, planID string) (*Su
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
-	
+
 	// Add trial if configured
 	if plan.TrialDays > 0 {
 		now := time.Now()
@@ -335,11 +335,11 @@ func (m *Manager) Subscribe(ctx context.Context, customerID, planID string) (*Su
 		sub.TrialEnd = &trialEnd
 		sub.Status = StatusTrialing
 	}
-	
+
 	if err := m.provider.CreateSubscription(ctx, sub); err != nil {
 		return nil, fmt.Errorf("failed to create subscription: %v", err)
 	}
-	
+
 	common.Info("[PAYMENT] Created subscription: %s for customer %s", sub.ID, customerID)
 	return sub, nil
 }
@@ -349,7 +349,7 @@ func (m *Manager) CancelSubscription(ctx context.Context, subscriptionID string,
 	if err := m.provider.CancelSubscription(ctx, subscriptionID, immediately); err != nil {
 		return fmt.Errorf("failed to cancel subscription: %v", err)
 	}
-	
+
 	common.Info("[PAYMENT] Canceled subscription: %s (immediately: %v)", subscriptionID, immediately)
 	return nil
 }
@@ -360,14 +360,14 @@ func (m *Manager) ChangePlan(ctx context.Context, subscriptionID, newPlanID stri
 	if err != nil {
 		return fmt.Errorf("failed to get subscription: %v", err)
 	}
-	
+
 	sub.PlanID = newPlanID
 	sub.UpdatedAt = time.Now()
-	
+
 	if err := m.provider.UpdateSubscription(ctx, sub); err != nil {
 		return fmt.Errorf("failed to update subscription: %v", err)
 	}
-	
+
 	common.Info("[PAYMENT] Changed subscription %s to plan %s", subscriptionID, newPlanID)
 	return nil
 }
@@ -381,11 +381,11 @@ func (m *Manager) ChargeOneTime(ctx context.Context, customerID string, amount i
 		Description: description,
 		CreatedAt:   time.Now(),
 	}
-	
+
 	if err := m.provider.ChargePayment(ctx, charge); err != nil {
 		return nil, fmt.Errorf("failed to charge payment: %v", err)
 	}
-	
+
 	common.Info("[PAYMENT] Charged %d cents to customer %s", amount, customerID)
 	return charge, nil
 }
@@ -394,7 +394,7 @@ func (m *Manager) ChargeOneTime(ctx context.Context, customerID string, amount i
 func (m *Manager) AddPlan(plan *Plan) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	m.plans[plan.ID] = plan
 	common.Debug("[PAYMENT] Added plan: %s (%s)", plan.ID, plan.Name)
 }
@@ -403,7 +403,7 @@ func (m *Manager) AddPlan(plan *Plan) {
 func (m *Manager) GetPlan(planID string) (*Plan, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	plan, ok := m.plans[planID]
 	return plan, ok
 }
@@ -412,14 +412,14 @@ func (m *Manager) GetPlan(planID string) (*Plan, bool) {
 func (m *Manager) ListPlans() []*Plan {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	var plans []*Plan
 	for _, plan := range m.plans {
 		if plan.Active {
 			plans = append(plans, plan)
 		}
 	}
-	
+
 	return plans
 }
 
@@ -429,7 +429,7 @@ func (m *Manager) HandleWebhook(ctx context.Context, payload []byte, signature s
 	if err != nil {
 		return fmt.Errorf("failed to handle webhook: %v", err)
 	}
-	
+
 	// Process event based on type
 	switch event.Type {
 	case "subscription.created":
@@ -447,7 +447,7 @@ func (m *Manager) HandleWebhook(ctx context.Context, payload []byte, signature s
 	default:
 		common.Debug("[PAYMENT] Webhook: Unhandled event type: %s", event.Type)
 	}
-	
+
 	return nil
 }
 
@@ -465,7 +465,7 @@ type UsageRecord struct {
 // TrackUsage records usage for metered billing
 func (m *Manager) TrackUsage(ctx context.Context, record *UsageRecord) error {
 	// This would be implemented based on the payment provider's usage API
-	common.Debug("[PAYMENT] Tracked usage: %s = %d for customer %s", 
+	common.Debug("[PAYMENT] Tracked usage: %s = %d for customer %s",
 		record.Metric, record.Quantity, record.CustomerID)
 	return nil
 }
