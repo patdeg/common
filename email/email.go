@@ -35,34 +35,34 @@ import (
 type Service interface {
 	// Send sends an email message
 	Send(ctx context.Context, message *Message) error
-	
+
 	// SendTemplate sends a templated email
 	SendTemplate(ctx context.Context, templateName string, data interface{}, recipients []string) error
-	
+
 	// SendBatch sends multiple emails in batch
 	SendBatch(ctx context.Context, messages []*Message) error
-	
+
 	// ValidateEmail validates an email address
 	ValidateEmail(email string) error
-	
+
 	// GetProvider returns the current provider name
 	GetProvider() string
 }
 
 // Message represents an email message
 type Message struct {
-	From        Address           `json:"from"`
-	To          []Address         `json:"to"`
-	CC          []Address         `json:"cc,omitempty"`
-	BCC         []Address         `json:"bcc,omitempty"`
-	ReplyTo     *Address          `json:"reply_to,omitempty"`
-	Subject     string            `json:"subject"`
-	Text        string            `json:"text,omitempty"`
-	HTML        string            `json:"html,omitempty"`
-	Attachments []Attachment      `json:"attachments,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
-	TemplateID  string            `json:"template_id,omitempty"`
+	From         Address                `json:"from"`
+	To           []Address              `json:"to"`
+	CC           []Address              `json:"cc,omitempty"`
+	BCC          []Address              `json:"bcc,omitempty"`
+	ReplyTo      *Address               `json:"reply_to,omitempty"`
+	Subject      string                 `json:"subject"`
+	Text         string                 `json:"text,omitempty"`
+	HTML         string                 `json:"html,omitempty"`
+	Attachments  []Attachment           `json:"attachments,omitempty"`
+	Headers      map[string]string      `json:"headers,omitempty"`
+	Metadata     map[string]string      `json:"metadata,omitempty"`
+	TemplateID   string                 `json:"template_id,omitempty"`
 	TemplateData map[string]interface{} `json:"template_data,omitempty"`
 }
 
@@ -74,10 +74,10 @@ type Address struct {
 
 // Attachment represents an email attachment
 type Attachment struct {
-	Content     string `json:"content"`     // Base64 encoded content
-	Type        string `json:"type"`        // MIME type
-	Filename    string `json:"filename"`    // File name
-	Disposition string `json:"disposition"` // inline or attachment
+	Content     string `json:"content"`              // Base64 encoded content
+	Type        string `json:"type"`                 // MIME type
+	Filename    string `json:"filename"`             // File name
+	Disposition string `json:"disposition"`          // inline or attachment
 	ContentID   string `json:"content_id,omitempty"` // For inline attachments
 }
 
@@ -125,21 +125,21 @@ func NewService(config Config) (Service, error) {
 			}
 		}
 	}
-	
+
 	if config.FromEmail == "" {
 		config.FromEmail = os.Getenv("FROM_EMAIL")
 		if config.FromEmail == "" {
 			config.FromEmail = "noreply@example.com"
 		}
 	}
-	
+
 	if config.FromName == "" {
 		config.FromName = os.Getenv("FROM_NAME")
 		if config.FromName == "" {
 			config.FromName = "Application"
 		}
 	}
-	
+
 	switch config.Provider {
 	case "sendgrid":
 		return NewSendGridService(config)
@@ -158,11 +158,11 @@ func NewSendGridService(config Config) (*SendGridService, error) {
 	if config.APIKey == "" {
 		config.APIKey = os.Getenv("SENDGRID_API_KEY")
 	}
-	
+
 	if config.APIKey == "" {
 		return nil, fmt.Errorf("SendGrid API key is required")
 	}
-	
+
 	return &SendGridService{
 		config:    config,
 		apiKey:    config.APIKey,
@@ -179,38 +179,38 @@ func (s *SendGridService) Send(ctx context.Context, message *Message) error {
 		message.From.Email = s.fromEmail
 		message.From.Name = s.fromName
 	}
-	
+
 	// Build SendGrid request
 	sgReq := s.buildSendGridRequest(message)
-	
+
 	// Marshal to JSON
 	data, err := json.Marshal(sgReq)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %v", err)
 	}
-	
+
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.sendgrid.com/v3/mail/send", bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+s.apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Send request
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode >= 400 {
 		var errResp map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errResp)
 		return fmt.Errorf("SendGrid error (status %d): %v", resp.StatusCode, errResp)
 	}
-	
+
 	common.Info("[EMAIL] Sent email via SendGrid: %s to %d recipients", message.Subject, len(message.To))
 	return nil
 }
@@ -222,30 +222,30 @@ func (s *SendGridService) SendTemplate(ctx context.Context, templateName string,
 	if !ok {
 		return fmt.Errorf("template not found: %s", templateName)
 	}
-	
+
 	// Parse and execute template
 	tmpl, err := template.New(templateName).Parse(tmplContent)
 	if err != nil {
 		return fmt.Errorf("failed to parse template: %v", err)
 	}
-	
+
 	var htmlBuf, textBuf bytes.Buffer
 	if err := tmpl.Execute(&htmlBuf, data); err != nil {
 		return fmt.Errorf("failed to execute template: %v", err)
 	}
-	
+
 	// Create message
 	message := &Message{
 		Subject: fmt.Sprintf("Message from %s", s.fromName),
 		HTML:    htmlBuf.String(),
 		Text:    textBuf.String(),
 	}
-	
+
 	// Add recipients
 	for _, email := range recipients {
 		message.To = append(message.To, Address{Email: email})
 	}
-	
+
 	return s.Send(ctx, message)
 }
 
@@ -281,15 +281,15 @@ func (s *SendGridService) buildSendGridRequest(message *Message) map[string]inte
 	personalizations := []map[string]interface{}{{
 		"to": convertAddresses(message.To),
 	}}
-	
+
 	if len(message.CC) > 0 {
 		personalizations[0]["cc"] = convertAddresses(message.CC)
 	}
-	
+
 	if len(message.BCC) > 0 {
 		personalizations[0]["bcc"] = convertAddresses(message.BCC)
 	}
-	
+
 	// Build content
 	var content []map[string]string
 	if message.Text != "" {
@@ -304,7 +304,7 @@ func (s *SendGridService) buildSendGridRequest(message *Message) map[string]inte
 			"value": message.HTML,
 		})
 	}
-	
+
 	req := map[string]interface{}{
 		"personalizations": personalizations,
 		"from": map[string]string{
@@ -314,7 +314,7 @@ func (s *SendGridService) buildSendGridRequest(message *Message) map[string]inte
 		"subject": message.Subject,
 		"content": content,
 	}
-	
+
 	// Add reply-to if specified
 	if message.ReplyTo != nil {
 		req["reply_to"] = map[string]string{
@@ -322,7 +322,7 @@ func (s *SendGridService) buildSendGridRequest(message *Message) map[string]inte
 			"name":  message.ReplyTo.Name,
 		}
 	}
-	
+
 	// Add attachments
 	if len(message.Attachments) > 0 {
 		var attachments []map[string]string
@@ -337,7 +337,7 @@ func (s *SendGridService) buildSendGridRequest(message *Message) map[string]inte
 		}
 		req["attachments"] = attachments
 	}
-	
+
 	return req
 }
 
@@ -356,10 +356,10 @@ func (s *LocalService) Send(ctx context.Context, message *Message) error {
 		message.From.Email = s.config.FromEmail
 		message.From.Name = s.config.FromName
 	}
-	
+
 	// Store message
 	s.messages = append(s.messages, message)
-	
+
 	// Log the email
 	common.Info("[LOCAL_EMAIL] Email queued:")
 	common.Info("  From: %s <%s>", message.From.Name, message.From.Email)
@@ -371,14 +371,14 @@ func (s *LocalService) Send(ctx context.Context, message *Message) error {
 		common.Info("  BCC: %v", formatAddresses(message.BCC))
 	}
 	common.Info("  Subject: %s", message.Subject)
-	
+
 	if s.config.IsDev && message.HTML != "" {
 		// In dev mode, save HTML to file for inspection
 		filename := fmt.Sprintf("/tmp/email_%d.html", time.Now().Unix())
 		os.WriteFile(filename, []byte(message.HTML), 0644)
 		common.Info("  HTML saved to: %s", filename)
 	}
-	
+
 	return nil
 }
 
@@ -389,11 +389,11 @@ func (s *LocalService) SendTemplate(ctx context.Context, templateName string, da
 		TemplateID:   templateName,
 		TemplateData: map[string]interface{}{"data": data},
 	}
-	
+
 	for _, email := range recipients {
 		message.To = append(message.To, Address{Email: email})
 	}
-	
+
 	return s.Send(ctx, message)
 }
 
@@ -479,7 +479,7 @@ func AttachmentFromFile(filename string, contentType string) (*Attachment, error
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &Attachment{
 		Content:     base64.StdEncoding.EncodeToString(data),
 		Type:        contentType,

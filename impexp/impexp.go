@@ -65,10 +65,10 @@ type TransformFunc func(entity interface{}) (interface{}, error)
 type Exporter interface {
 	// Export exports data to a writer
 	Export(ctx context.Context, data interface{}, w io.Writer, opts *Options) error
-	
+
 	// ExportFile exports data to a file
 	ExportFile(ctx context.Context, data interface{}, filename string, opts *Options) error
-	
+
 	// ExportBatch exports data in batches
 	ExportBatch(ctx context.Context, dataSource DataSource, w io.Writer, opts *Options) error
 }
@@ -77,10 +77,10 @@ type Exporter interface {
 type Importer interface {
 	// Import imports data from a reader
 	Import(ctx context.Context, r io.Reader, dest interface{}, opts *Options) error
-	
+
 	// ImportFile imports data from a file
 	ImportFile(ctx context.Context, filename string, dest interface{}, opts *Options) error
-	
+
 	// ImportBatch imports data in batches
 	ImportBatch(ctx context.Context, r io.Reader, dataSink DataSink, opts *Options) error
 }
@@ -89,7 +89,7 @@ type Importer interface {
 type DataSource interface {
 	// NextBatch returns the next batch of data
 	NextBatch(ctx context.Context, batchSize int) ([]interface{}, error)
-	
+
 	// HasMore indicates if more data is available
 	HasMore() bool
 }
@@ -121,7 +121,7 @@ func (e *DefaultExporter) Export(ctx context.Context, data interface{}, w io.Wri
 	if opts == nil {
 		opts = &Options{Format: FormatJSON}
 	}
-	
+
 	switch opts.Format {
 	case FormatJSON:
 		return e.exportJSON(data, w, opts)
@@ -141,19 +141,19 @@ func (e *DefaultExporter) ExportFile(ctx context.Context, data interface{}, file
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %v", err)
 	}
-	
+
 	// Create file
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %v", err)
 	}
 	defer file.Close()
-	
+
 	// Export data
 	if err := e.Export(ctx, data, file, opts); err != nil {
 		return err
 	}
-	
+
 	common.Info("[IMPEXP] Exported data to %s", filename)
 	return nil
 }
@@ -163,11 +163,11 @@ func (e *DefaultExporter) ExportBatch(ctx context.Context, dataSource DataSource
 	if opts == nil {
 		opts = &Options{Format: FormatJSON, BatchSize: 100}
 	}
-	
+
 	if opts.BatchSize <= 0 {
 		opts.BatchSize = 100
 	}
-	
+
 	// Start export based on format
 	switch opts.Format {
 	case FormatJSON:
@@ -188,10 +188,10 @@ func (e *DefaultExporter) ExportBatch(ctx context.Context, dataSource DataSource
 			csvWriter.Flush()
 		}
 	}
-	
+
 	totalExported := 0
 	first := true
-	
+
 	for dataSource.HasMore() {
 		// Check context cancellation
 		select {
@@ -199,20 +199,20 @@ func (e *DefaultExporter) ExportBatch(ctx context.Context, dataSource DataSource
 			return ctx.Err()
 		default:
 		}
-		
+
 		// Get next batch
 		batch, err := dataSource.NextBatch(ctx, opts.BatchSize)
 		if err != nil {
 			return fmt.Errorf("failed to get batch: %v", err)
 		}
-		
+
 		// Export batch
 		for _, item := range batch {
 			// Apply filter if provided
 			if opts.Filter != nil && !opts.Filter(item) {
 				continue
 			}
-			
+
 			// Apply transform if provided
 			if opts.Transform != nil {
 				transformed, err := opts.Transform(item)
@@ -222,7 +222,7 @@ func (e *DefaultExporter) ExportBatch(ctx context.Context, dataSource DataSource
 				}
 				item = transformed
 			}
-			
+
 			// Write item based on format
 			switch opts.Format {
 			case FormatJSON:
@@ -249,11 +249,11 @@ func (e *DefaultExporter) ExportBatch(ctx context.Context, dataSource DataSource
 				// Write row (simplified)
 				csvWriter.Flush()
 			}
-			
+
 			totalExported++
 		}
 	}
-	
+
 	// Close export based on format
 	switch opts.Format {
 	case FormatJSON:
@@ -261,7 +261,7 @@ func (e *DefaultExporter) ExportBatch(ctx context.Context, dataSource DataSource
 			return err
 		}
 	}
-	
+
 	common.Info("[IMPEXP] Exported %d items", totalExported)
 	return nil
 }
@@ -281,18 +281,18 @@ func (e *DefaultExporter) exportCSV(data interface{}, w io.Writer, opts *Options
 	if opts.Delimiter != 0 {
 		csvWriter.Comma = opts.Delimiter
 	}
-	
+
 	// Write headers if provided
 	if len(opts.Headers) > 0 {
 		if err := csvWriter.Write(opts.Headers); err != nil {
 			return err
 		}
 	}
-	
+
 	// Convert data to CSV rows
 	// This is a simplified implementation
 	// In production, use reflection to handle various data types
-	
+
 	csvWriter.Flush()
 	return csvWriter.Error()
 }
@@ -301,40 +301,40 @@ func (e *DefaultExporter) exportCSV(data interface{}, w io.Writer, opts *Options
 func (e *DefaultExporter) exportZIP(ctx context.Context, data interface{}, w io.Writer, opts *Options) error {
 	zipWriter := zip.NewWriter(w)
 	defer zipWriter.Close()
-	
+
 	// Add metadata file
 	metaFile, err := zipWriter.Create("metadata.json")
 	if err != nil {
 		return err
 	}
-	
+
 	metadata := map[string]interface{}{
 		"exported_at": time.Now().Format(time.RFC3339),
 		"format":      "zip",
 		"version":     "1.0",
 	}
-	
+
 	if opts.Metadata != nil {
 		for k, v := range opts.Metadata {
 			metadata[k] = v
 		}
 	}
-	
+
 	if err := json.NewEncoder(metaFile).Encode(metadata); err != nil {
 		return err
 	}
-	
+
 	// Add data file
 	dataFile, err := zipWriter.Create("data.json")
 	if err != nil {
 		return err
 	}
-	
+
 	encoder := json.NewEncoder(dataFile)
 	if opts.Pretty {
 		encoder.SetIndent("", "  ")
 	}
-	
+
 	return encoder.Encode(data)
 }
 
@@ -343,7 +343,7 @@ func (i *DefaultImporter) Import(ctx context.Context, r io.Reader, dest interfac
 	if opts == nil {
 		opts = &Options{Format: FormatJSON}
 	}
-	
+
 	switch opts.Format {
 	case FormatJSON:
 		return i.importJSON(r, dest, opts)
@@ -363,7 +363,7 @@ func (i *DefaultImporter) ImportFile(ctx context.Context, filename string, dest 
 		return fmt.Errorf("failed to open file: %v", err)
 	}
 	defer file.Close()
-	
+
 	// Auto-detect format from extension if not specified
 	if opts == nil {
 		opts = &Options{}
@@ -381,11 +381,11 @@ func (i *DefaultImporter) ImportFile(ctx context.Context, filename string, dest 
 			opts.Format = FormatJSON
 		}
 	}
-	
+
 	if err := i.Import(ctx, file, dest, opts); err != nil {
 		return err
 	}
-	
+
 	common.Info("[IMPEXP] Imported data from %s", filename)
 	return nil
 }
@@ -395,13 +395,13 @@ func (i *DefaultImporter) ImportBatch(ctx context.Context, r io.Reader, dataSink
 	if opts == nil {
 		opts = &Options{Format: FormatJSON, BatchSize: 100}
 	}
-	
+
 	if opts.BatchSize <= 0 {
 		opts.BatchSize = 100
 	}
-	
+
 	decoder := json.NewDecoder(r)
-	
+
 	// Read opening bracket
 	token, err := decoder.Token()
 	if err != nil {
@@ -410,10 +410,10 @@ func (i *DefaultImporter) ImportBatch(ctx context.Context, r io.Reader, dataSink
 	if delim, ok := token.(json.Delim); !ok || delim != '[' {
 		return fmt.Errorf("expected JSON array")
 	}
-	
+
 	batch := make([]interface{}, 0, opts.BatchSize)
 	totalImported := 0
-	
+
 	// Read items
 	for decoder.More() {
 		// Check context cancellation
@@ -422,17 +422,17 @@ func (i *DefaultImporter) ImportBatch(ctx context.Context, r io.Reader, dataSink
 			return ctx.Err()
 		default:
 		}
-		
+
 		var item interface{}
 		if err := decoder.Decode(&item); err != nil {
 			return err
 		}
-		
+
 		// Apply filter if provided
 		if opts.Filter != nil && !opts.Filter(item) {
 			continue
 		}
-		
+
 		// Apply transform if provided
 		if opts.Transform != nil {
 			transformed, err := opts.Transform(item)
@@ -442,9 +442,9 @@ func (i *DefaultImporter) ImportBatch(ctx context.Context, r io.Reader, dataSink
 			}
 			item = transformed
 		}
-		
+
 		batch = append(batch, item)
-		
+
 		// Write batch when full
 		if len(batch) >= opts.BatchSize {
 			if err := dataSink.WriteBatch(ctx, batch); err != nil {
@@ -454,7 +454,7 @@ func (i *DefaultImporter) ImportBatch(ctx context.Context, r io.Reader, dataSink
 			batch = batch[:0]
 		}
 	}
-	
+
 	// Write remaining items
 	if len(batch) > 0 {
 		if err := dataSink.WriteBatch(ctx, batch); err != nil {
@@ -462,7 +462,7 @@ func (i *DefaultImporter) ImportBatch(ctx context.Context, r io.Reader, dataSink
 		}
 		totalImported += len(batch)
 	}
-	
+
 	common.Info("[IMPEXP] Imported %d items", totalImported)
 	return nil
 }
@@ -478,17 +478,17 @@ func (i *DefaultImporter) importCSV(r io.Reader, dest interface{}, opts *Options
 	if opts.Delimiter != 0 {
 		csvReader.Comma = opts.Delimiter
 	}
-	
+
 	// Read all records
 	records, err := csvReader.ReadAll()
 	if err != nil {
 		return err
 	}
-	
+
 	// Convert CSV records to destination type
 	// This is a simplified implementation
 	// In production, use reflection to handle various data types
-	
+
 	common.Info("[IMPEXP] Imported %d CSV records", len(records))
 	return nil
 }
@@ -504,35 +504,35 @@ func (i *DefaultImporter) importZIP(ctx context.Context, r io.Reader, dest inter
 func Backup(ctx context.Context, sources map[string]DataSource, outputDir string) error {
 	timestamp := time.Now().Format("20060102-150405")
 	backupDir := filepath.Join(outputDir, fmt.Sprintf("backup-%s", timestamp))
-	
+
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return fmt.Errorf("failed to create backup directory: %v", err)
 	}
-	
+
 	exporter := NewExporter()
-	
+
 	for name, source := range sources {
 		filename := filepath.Join(backupDir, fmt.Sprintf("%s.json", name))
 		file, err := os.Create(filename)
 		if err != nil {
 			return fmt.Errorf("failed to create backup file: %v", err)
 		}
-		
+
 		opts := &Options{
 			Format:    FormatJSON,
 			Pretty:    true,
 			BatchSize: 100,
 		}
-		
+
 		if err := exporter.ExportBatch(ctx, source, file, opts); err != nil {
 			file.Close()
 			return fmt.Errorf("failed to export %s: %v", name, err)
 		}
-		
+
 		file.Close()
 		common.Info("[BACKUP] Backed up %s to %s", name, filename)
 	}
-	
+
 	common.Info("[BACKUP] Backup completed in %s", backupDir)
 	return nil
 }
@@ -540,10 +540,10 @@ func Backup(ctx context.Context, sources map[string]DataSource, outputDir string
 // Restore restores data from a backup
 func Restore(ctx context.Context, backupDir string, sinks map[string]DataSink) error {
 	importer := NewImporter()
-	
+
 	for name, sink := range sinks {
 		filename := filepath.Join(backupDir, fmt.Sprintf("%s.json", name))
-		
+
 		file, err := os.Open(filename)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -552,21 +552,21 @@ func Restore(ctx context.Context, backupDir string, sinks map[string]DataSink) e
 			}
 			return fmt.Errorf("failed to open backup file: %v", err)
 		}
-		
+
 		opts := &Options{
 			Format:    FormatJSON,
 			BatchSize: 100,
 		}
-		
+
 		if err := importer.ImportBatch(ctx, file, sink, opts); err != nil {
 			file.Close()
 			return fmt.Errorf("failed to import %s: %v", name, err)
 		}
-		
+
 		file.Close()
 		common.Info("[RESTORE] Restored %s from %s", name, filename)
 	}
-	
+
 	common.Info("[RESTORE] Restore completed from %s", backupDir)
 	return nil
 }

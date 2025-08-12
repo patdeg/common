@@ -32,7 +32,7 @@ import (
 type HealthChecker interface {
 	// Check performs a health check
 	Check(ctx context.Context) *HealthStatus
-	
+
 	// Name returns the checker name
 	Name() string
 }
@@ -70,7 +70,7 @@ func NewMonitor(checkPeriod time.Duration) *Monitor {
 	if checkPeriod == 0 {
 		checkPeriod = 30 * time.Second
 	}
-	
+
 	m := &Monitor{
 		checkers:    make(map[string]HealthChecker),
 		results:     make(map[string]*HealthStatus),
@@ -78,10 +78,10 @@ func NewMonitor(checkPeriod time.Duration) *Monitor {
 		checkPeriod: checkPeriod,
 		stopChan:    make(chan struct{}),
 	}
-	
+
 	// Start background health checks
 	go m.runHealthChecks()
-	
+
 	return m
 }
 
@@ -89,7 +89,7 @@ func NewMonitor(checkPeriod time.Duration) *Monitor {
 func (m *Monitor) AddChecker(checker HealthChecker) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	m.checkers[checker.Name()] = checker
 	common.Debug("[MONITOR] Added health checker: %s", checker.Name())
 }
@@ -98,7 +98,7 @@ func (m *Monitor) AddChecker(checker HealthChecker) {
 func (m *Monitor) RemoveChecker(name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	delete(m.checkers, name)
 	delete(m.results, name)
 }
@@ -107,17 +107,17 @@ func (m *Monitor) RemoveChecker(name string) {
 func (m *Monitor) GetHealth() *HealthReport {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	report := &HealthReport{
 		Status:    StatusHealthy,
 		Checks:    make(map[string]*HealthStatus),
 		Timestamp: time.Now(),
 	}
-	
+
 	// Aggregate health status
 	for name, status := range m.results {
 		report.Checks[name] = status
-		
+
 		// Update overall status
 		if status.Status == StatusUnhealthy {
 			report.Status = StatusUnhealthy
@@ -125,10 +125,10 @@ func (m *Monitor) GetHealth() *HealthReport {
 			report.Status = StatusDegraded
 		}
 	}
-	
+
 	// Add system metrics
 	report.System = m.getSystemMetrics()
-	
+
 	return report
 }
 
@@ -142,10 +142,10 @@ func (m *Monitor) CheckHealth(ctx context.Context) *HealthReport {
 func (m *Monitor) runHealthChecks() {
 	ticker := time.NewTicker(m.checkPeriod)
 	defer ticker.Stop()
-	
+
 	// Initial check
 	m.performHealthChecks(context.Background())
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -164,43 +164,43 @@ func (m *Monitor) performHealthChecks(ctx context.Context) {
 		checkers[k] = v
 	}
 	m.mu.RUnlock()
-	
+
 	// Run checks in parallel
 	var wg sync.WaitGroup
 	results := make(chan struct {
 		name   string
 		status *HealthStatus
 	}, len(checkers))
-	
+
 	for name, checker := range checkers {
 		wg.Add(1)
 		go func(n string, c HealthChecker) {
 			defer wg.Done()
-			
+
 			// Run check with timeout
 			checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
-			
+
 			start := time.Now()
 			status := c.Check(checkCtx)
 			status.Duration = time.Since(start)
 			status.LastChecked = time.Now()
-			
+
 			results <- struct {
 				name   string
 				status *HealthStatus
 			}{name: n, status: status}
 		}(name, checker)
 	}
-	
+
 	wg.Wait()
 	close(results)
-	
+
 	// Update results
 	m.mu.Lock()
 	for result := range results {
 		m.results[result.name] = result.status
-		
+
 		// Record metric
 		m.metrics.RecordHealthCheck(result.name, result.status.Status)
 	}
@@ -211,7 +211,7 @@ func (m *Monitor) performHealthChecks(ctx context.Context) {
 func (m *Monitor) getSystemMetrics() *SystemMetrics {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
-	
+
 	return &SystemMetrics{
 		Memory: MemoryMetrics{
 			Alloc:      memStats.Alloc,
@@ -233,7 +233,7 @@ func (m *Monitor) Stop() {
 // ServeHTTP implements http.Handler for health endpoint
 func (m *Monitor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	report := m.GetHealth()
-	
+
 	// Set appropriate status code
 	statusCode := http.StatusOK
 	if report.Status == StatusUnhealthy {
@@ -241,7 +241,7 @@ func (m *Monitor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if report.Status == StatusDegraded {
 		statusCode = http.StatusOK // Still operational but degraded
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(report)
@@ -249,10 +249,10 @@ func (m *Monitor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // HealthReport represents the overall health report
 type HealthReport struct {
-	Status    Status                    `json:"status"`
-	Checks    map[string]*HealthStatus  `json:"checks"`
-	System    *SystemMetrics            `json:"system"`
-	Timestamp time.Time                 `json:"timestamp"`
+	Status    Status                   `json:"status"`
+	Checks    map[string]*HealthStatus `json:"checks"`
+	System    *SystemMetrics           `json:"system"`
+	Timestamp time.Time                `json:"timestamp"`
 }
 
 // SystemMetrics represents system-level metrics
@@ -312,7 +312,7 @@ func (d *DatabaseChecker) Check(ctx context.Context) *HealthStatus {
 			Message: fmt.Sprintf("Database error: %v", err),
 		}
 	}
-	
+
 	return &HealthStatus{
 		Status:  StatusHealthy,
 		Message: "Database connection OK",
@@ -349,7 +349,7 @@ func (h *HTTPChecker) Check(ctx context.Context) *HealthStatus {
 			Message: fmt.Sprintf("Failed to create request: %v", err),
 		}
 	}
-	
+
 	resp, err := h.client.Do(req)
 	if err != nil {
 		return &HealthStatus{
@@ -358,21 +358,21 @@ func (h *HTTPChecker) Check(ctx context.Context) *HealthStatus {
 		}
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode >= 500 {
 		return &HealthStatus{
 			Status:  StatusUnhealthy,
 			Message: fmt.Sprintf("Service returned %d", resp.StatusCode),
 		}
 	}
-	
+
 	if resp.StatusCode >= 400 {
 		return &HealthStatus{
 			Status:  StatusDegraded,
 			Message: fmt.Sprintf("Service returned %d", resp.StatusCode),
 		}
 	}
-	
+
 	return &HealthStatus{
 		Status:  StatusHealthy,
 		Message: fmt.Sprintf("Service returned %d", resp.StatusCode),
@@ -406,7 +406,7 @@ func (d *DiskSpaceChecker) Name() string {
 func (d *DiskSpaceChecker) Check(ctx context.Context) *HealthStatus {
 	// This is a simplified check
 	// In production, use syscall.Statfs or similar
-	
+
 	return &HealthStatus{
 		Status:  StatusHealthy,
 		Message: "Disk space OK",
@@ -438,7 +438,7 @@ func NewMetrics() *Metrics {
 func (m *Metrics) RecordHealthCheck(name string, status Status) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	key := fmt.Sprintf("%s_%s", name, status)
 	m.healthChecks[key]++
 }
@@ -466,13 +466,13 @@ func (m *Metrics) GetUptime() time.Duration {
 func (m *Metrics) GetStats() map[string]interface{} {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	stats := map[string]interface{}{
 		"uptime_seconds": m.GetUptime().Seconds(),
 		"requests":       m.requests,
 		"errors":         m.errors,
 		"health_checks":  m.healthChecks,
 	}
-	
+
 	return stats
 }

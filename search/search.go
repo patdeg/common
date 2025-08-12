@@ -32,19 +32,19 @@ import (
 type Engine interface {
 	// Index adds or updates a document
 	Index(ctx context.Context, doc Document) error
-	
+
 	// Search performs a search query
 	Search(ctx context.Context, query Query) (*Results, error)
-	
+
 	// Delete removes a document
 	Delete(ctx context.Context, id string) error
-	
+
 	// DeleteIndex removes all documents from an index
 	DeleteIndex(ctx context.Context, index string) error
-	
+
 	// GetDocument retrieves a document by ID
 	GetDocument(ctx context.Context, id string) (*Document, error)
-	
+
 	// UpdateDocument partially updates a document
 	UpdateDocument(ctx context.Context, id string, updates map[string]interface{}) error
 }
@@ -64,16 +64,16 @@ type Document struct {
 
 // Query represents a search query
 type Query struct {
-	Text       string                 `json:"text"`
-	Index      string                 `json:"index,omitempty"`
-	Type       string                 `json:"type,omitempty"`
-	Tags       []string               `json:"tags,omitempty"`
-	Filters    map[string]interface{} `json:"filters,omitempty"`
-	From       int                    `json:"from"`
-	Size       int                    `json:"size"`
-	Sort       []SortField            `json:"sort,omitempty"`
-	Highlight  bool                   `json:"highlight"`
-	Facets     []string               `json:"facets,omitempty"`
+	Text      string                 `json:"text"`
+	Index     string                 `json:"index,omitempty"`
+	Type      string                 `json:"type,omitempty"`
+	Tags      []string               `json:"tags,omitempty"`
+	Filters   map[string]interface{} `json:"filters,omitempty"`
+	From      int                    `json:"from"`
+	Size      int                    `json:"size"`
+	Sort      []SortField            `json:"sort,omitempty"`
+	Highlight bool                   `json:"highlight"`
+	Facets    []string               `json:"facets,omitempty"`
 }
 
 // SortField defines sorting criteria
@@ -84,11 +84,11 @@ type SortField struct {
 
 // Results represents search results
 type Results struct {
-	Total     int                    `json:"total"`
-	Hits      []Document             `json:"hits"`
-	Facets    map[string][]FacetItem `json:"facets,omitempty"`
-	Took      time.Duration          `json:"took"`
-	Query     string                 `json:"query"`
+	Total  int                    `json:"total"`
+	Hits   []Document             `json:"hits"`
+	Facets map[string][]FacetItem `json:"facets,omitempty"`
+	Took   time.Duration          `json:"took"`
+	Query  string                 `json:"query"`
 }
 
 // FacetItem represents a facet value and count
@@ -116,28 +116,28 @@ func NewInMemoryEngine() *InMemoryEngine {
 func (e *InMemoryEngine) Index(ctx context.Context, doc Document) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	if doc.ID == "" {
 		return fmt.Errorf("document ID is required")
 	}
-	
+
 	if doc.Index == "" {
 		doc.Index = "default"
 	}
-	
+
 	if doc.Timestamp.IsZero() {
 		doc.Timestamp = time.Now()
 	}
-	
+
 	// Store document
 	e.documents[doc.ID] = &doc
-	
+
 	// Add to index
 	if e.indices[doc.Index] == nil {
 		e.indices[doc.Index] = make(map[string]*Document)
 	}
 	e.indices[doc.Index][doc.ID] = &doc
-	
+
 	common.Debug("[SEARCH] Indexed document %s in index %s", doc.ID, doc.Index)
 	return nil
 }
@@ -145,10 +145,10 @@ func (e *InMemoryEngine) Index(ctx context.Context, doc Document) error {
 // Search performs a search query
 func (e *InMemoryEngine) Search(ctx context.Context, query Query) (*Results, error) {
 	start := time.Now()
-	
+
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	
+
 	// Get documents from specified index
 	var searchDocs []*Document
 	if query.Index != "" {
@@ -163,7 +163,7 @@ func (e *InMemoryEngine) Search(ctx context.Context, query Query) (*Results, err
 			searchDocs = append(searchDocs, doc)
 		}
 	}
-	
+
 	// Filter by type
 	if query.Type != "" {
 		var filtered []*Document
@@ -174,7 +174,7 @@ func (e *InMemoryEngine) Search(ctx context.Context, query Query) (*Results, err
 		}
 		searchDocs = filtered
 	}
-	
+
 	// Filter by tags
 	if len(query.Tags) > 0 {
 		var filtered []*Document
@@ -185,29 +185,29 @@ func (e *InMemoryEngine) Search(ctx context.Context, query Query) (*Results, err
 		}
 		searchDocs = filtered
 	}
-	
+
 	// Text search
 	var results []Document
 	if query.Text != "" {
 		queryLower := strings.ToLower(query.Text)
 		queryWords := strings.Fields(queryLower)
-		
+
 		for _, doc := range searchDocs {
 			score := calculateScore(doc, queryWords)
 			if score > 0 {
 				docCopy := *doc
 				docCopy.Score = score
-				
+
 				// Highlight matches if requested
 				if query.Highlight {
 					docCopy.Content = highlightMatches(docCopy.Content, queryWords)
 					docCopy.Title = highlightMatches(docCopy.Title, queryWords)
 				}
-				
+
 				results = append(results, docCopy)
 			}
 		}
-		
+
 		// Sort by score
 		sort.Slice(results, func(i, j int) bool {
 			return results[i].Score > results[j].Score
@@ -218,41 +218,41 @@ func (e *InMemoryEngine) Search(ctx context.Context, query Query) (*Results, err
 			results = append(results, *doc)
 		}
 	}
-	
+
 	// Apply custom sorting
 	if len(query.Sort) > 0 {
 		applySorting(results, query.Sort)
 	}
-	
+
 	// Calculate facets if requested
 	var facets map[string][]FacetItem
 	if len(query.Facets) > 0 {
 		facets = calculateFacets(results, query.Facets)
 	}
-	
+
 	// Pagination
 	total := len(results)
 	from := query.From
 	if from < 0 {
 		from = 0
 	}
-	
+
 	size := query.Size
 	if size <= 0 {
 		size = 10
 	}
-	
+
 	to := from + size
 	if to > total {
 		to = total
 	}
-	
+
 	if from < total {
 		results = results[from:to]
 	} else {
 		results = []Document{}
 	}
-	
+
 	return &Results{
 		Total:  total,
 		Hits:   results,
@@ -266,20 +266,20 @@ func (e *InMemoryEngine) Search(ctx context.Context, query Query) (*Results, err
 func (e *InMemoryEngine) Delete(ctx context.Context, id string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	doc, ok := e.documents[id]
 	if !ok {
 		return fmt.Errorf("document not found: %s", id)
 	}
-	
+
 	// Remove from index
 	if indexDocs, ok := e.indices[doc.Index]; ok {
 		delete(indexDocs, id)
 	}
-	
+
 	// Remove from documents
 	delete(e.documents, id)
-	
+
 	common.Debug("[SEARCH] Deleted document %s", id)
 	return nil
 }
@@ -288,21 +288,21 @@ func (e *InMemoryEngine) Delete(ctx context.Context, id string) error {
 func (e *InMemoryEngine) DeleteIndex(ctx context.Context, index string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	// Get all documents in index
 	indexDocs, ok := e.indices[index]
 	if !ok {
 		return nil // Index doesn't exist
 	}
-	
+
 	// Remove documents
 	for id := range indexDocs {
 		delete(e.documents, id)
 	}
-	
+
 	// Remove index
 	delete(e.indices, index)
-	
+
 	common.Info("[SEARCH] Deleted index %s", index)
 	return nil
 }
@@ -311,12 +311,12 @@ func (e *InMemoryEngine) DeleteIndex(ctx context.Context, index string) error {
 func (e *InMemoryEngine) GetDocument(ctx context.Context, id string) (*Document, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	
+
 	doc, ok := e.documents[id]
 	if !ok {
 		return nil, fmt.Errorf("document not found: %s", id)
 	}
-	
+
 	return doc, nil
 }
 
@@ -324,12 +324,12 @@ func (e *InMemoryEngine) GetDocument(ctx context.Context, id string) (*Document,
 func (e *InMemoryEngine) UpdateDocument(ctx context.Context, id string, updates map[string]interface{}) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	doc, ok := e.documents[id]
 	if !ok {
 		return fmt.Errorf("document not found: %s", id)
 	}
-	
+
 	// Apply updates
 	for key, value := range updates {
 		switch key {
@@ -351,9 +351,9 @@ func (e *InMemoryEngine) UpdateDocument(ctx context.Context, id string, updates 
 			}
 		}
 	}
-	
+
 	doc.Timestamp = time.Now()
-	
+
 	common.Debug("[SEARCH] Updated document %s", id)
 	return nil
 }
@@ -365,31 +365,31 @@ func hasAnyTag(docTags, queryTags []string) bool {
 	for _, tag := range docTags {
 		tagMap[tag] = true
 	}
-	
+
 	for _, tag := range queryTags {
 		if tagMap[tag] {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
 func calculateScore(doc *Document, queryWords []string) float64 {
 	score := 0.0
-	
+
 	titleLower := strings.ToLower(doc.Title)
 	contentLower := strings.ToLower(doc.Content)
-	
+
 	for _, word := range queryWords {
 		// Title matches (weighted higher)
 		titleCount := strings.Count(titleLower, word)
 		score += float64(titleCount) * 2.0
-		
+
 		// Content matches
 		contentCount := strings.Count(contentLower, word)
 		score += float64(contentCount)
-		
+
 		// Tag matches
 		for _, tag := range doc.Tags {
 			if strings.Contains(strings.ToLower(tag), word) {
@@ -397,7 +397,7 @@ func calculateScore(doc *Document, queryWords []string) float64 {
 			}
 		}
 	}
-	
+
 	// Boost for exact phrase match
 	fullQuery := strings.Join(queryWords, " ")
 	if strings.Contains(titleLower, fullQuery) {
@@ -405,13 +405,13 @@ func calculateScore(doc *Document, queryWords []string) float64 {
 	} else if strings.Contains(contentLower, fullQuery) {
 		score *= 1.5
 	}
-	
+
 	return score
 }
 
 func highlightMatches(text string, queryWords []string) string {
 	result := text
-	
+
 	for _, word := range queryWords {
 		// Create case-insensitive regex
 		pattern := "(?i)" + regexp.QuoteMeta(word)
@@ -419,11 +419,11 @@ func highlightMatches(text string, queryWords []string) string {
 		if err != nil {
 			continue
 		}
-		
+
 		// Replace with highlighted version
 		result = re.ReplaceAllString(result, "<mark>$0</mark>")
 	}
-	
+
 	return result
 }
 
@@ -431,7 +431,7 @@ func applySorting(results []Document, sortFields []SortField) {
 	sort.Slice(results, func(i, j int) bool {
 		for _, field := range sortFields {
 			var cmp int
-			
+
 			switch field.Field {
 			case "score":
 				if results[i].Score < results[j].Score {
@@ -448,7 +448,7 @@ func applySorting(results []Document, sortFields []SortField) {
 			case "title":
 				cmp = strings.Compare(results[i].Title, results[j].Title)
 			}
-			
+
 			if cmp != 0 {
 				if field.Order == "desc" {
 					return cmp > 0
@@ -456,17 +456,17 @@ func applySorting(results []Document, sortFields []SortField) {
 				return cmp < 0
 			}
 		}
-		
+
 		return false
 	})
 }
 
 func calculateFacets(results []Document, facetFields []string) map[string][]FacetItem {
 	facets := make(map[string][]FacetItem)
-	
+
 	for _, field := range facetFields {
 		counts := make(map[string]int)
-		
+
 		for _, doc := range results {
 			switch field {
 			case "type":
@@ -481,7 +481,7 @@ func calculateFacets(results []Document, facetFields []string) map[string][]Face
 				counts[doc.Index]++
 			}
 		}
-		
+
 		// Convert to FacetItems
 		var items []FacetItem
 		for value, count := range counts {
@@ -490,15 +490,15 @@ func calculateFacets(results []Document, facetFields []string) map[string][]Face
 				Count: count,
 			})
 		}
-		
+
 		// Sort by count
 		sort.Slice(items, func(i, j int) bool {
 			return items[i].Count > items[j].Count
 		})
-		
+
 		facets[field] = items
 	}
-	
+
 	return facets
 }
 

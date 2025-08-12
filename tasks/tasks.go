@@ -31,16 +31,16 @@ import (
 type TaskQueue interface {
 	// CreateTask creates a new task in the queue
 	CreateTask(ctx context.Context, task *Task) error
-	
+
 	// CreateHTTPTask creates an HTTP task
 	CreateHTTPTask(ctx context.Context, queueName string, url string, payload interface{}) error
-	
+
 	// DeleteTask deletes a task from the queue
 	DeleteTask(ctx context.Context, queueName string, taskName string) error
-	
+
 	// PurgeQueue purges all tasks from a queue
 	PurgeQueue(ctx context.Context, queueName string) error
-	
+
 	// GetQueueStats returns statistics for a queue
 	GetQueueStats(ctx context.Context, queueName string) (*QueueStats, error)
 }
@@ -59,11 +59,11 @@ type Task struct {
 
 // RetryConfig defines retry behavior for tasks
 type RetryConfig struct {
-	MaxAttempts       int           // Maximum number of attempts
-	MaxRetryDuration  time.Duration // Maximum time to retry
-	MinBackoff        time.Duration // Minimum backoff duration
-	MaxBackoff        time.Duration // Maximum backoff duration
-	MaxDoublings      int           // Maximum number of backoff doublings
+	MaxAttempts      int           // Maximum number of attempts
+	MaxRetryDuration time.Duration // Maximum time to retry
+	MinBackoff       time.Duration // Minimum backoff duration
+	MaxBackoff       time.Duration // Maximum backoff duration
+	MaxDoublings     int           // Maximum number of backoff doublings
 }
 
 // QueueStats contains statistics about a queue
@@ -86,7 +86,7 @@ type CloudTaskQueue struct {
 type LocalTaskQueue struct {
 	tasks map[string][]*Task // queue -> tasks
 	mu    sync.RWMutex
-	
+
 	// Background processor
 	stopChan chan struct{}
 	wg       sync.WaitGroup
@@ -98,7 +98,7 @@ func NewTaskQueue(ctx context.Context) (TaskQueue, error) {
 		common.Info("[TASKS] Initializing LocalTaskQueue for development")
 		return NewLocalTaskQueue(), nil
 	}
-	
+
 	common.Info("[TASKS] Initializing CloudTaskQueue for production")
 	return NewCloudTaskQueue(ctx)
 }
@@ -109,18 +109,18 @@ func NewCloudTaskQueue(ctx context.Context) (*CloudTaskQueue, error) {
 	if projectID == "" {
 		projectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
 	}
-	
+
 	location := os.Getenv("CLOUD_TASKS_LOCATION")
 	if location == "" {
 		location = "us-central1"
 	}
-	
+
 	if projectID == "" {
 		return nil, fmt.Errorf("PROJECT_ID not configured")
 	}
-	
+
 	// In production, initialize Cloud Tasks client here
-	
+
 	return &CloudTaskQueue{
 		projectID: projectID,
 		location:  location,
@@ -133,11 +133,11 @@ func NewLocalTaskQueue() *LocalTaskQueue {
 		tasks:    make(map[string][]*Task),
 		stopChan: make(chan struct{}),
 	}
-	
+
 	// Start background processor
 	q.wg.Add(1)
 	go q.processLocalTasks()
-	
+
 	return q
 }
 
@@ -160,7 +160,7 @@ func (q *CloudTaskQueue) CreateHTTPTask(ctx context.Context, queueName string, u
 			"Content-Type": "application/json",
 		},
 	}
-	
+
 	return q.CreateTask(ctx, task)
 }
 
@@ -193,20 +193,20 @@ func (q *CloudTaskQueue) GetQueueStats(ctx context.Context, queueName string) (*
 func (q *LocalTaskQueue) CreateTask(ctx context.Context, task *Task) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	
+
 	if task.Queue == "" {
 		task.Queue = "default"
 	}
-	
+
 	if task.Name == "" {
 		task.Name = fmt.Sprintf("task-%d", time.Now().UnixNano())
 	}
-	
+
 	q.tasks[task.Queue] = append(q.tasks[task.Queue], task)
-	
-	common.Debug("[LOCAL_TASKS] Created task: queue=%s, name=%s, url=%s", 
+
+	common.Debug("[LOCAL_TASKS] Created task: queue=%s, name=%s, url=%s",
 		task.Queue, task.Name, task.URL)
-	
+
 	return nil
 }
 
@@ -221,7 +221,7 @@ func (q *LocalTaskQueue) CreateHTTPTask(ctx context.Context, queueName string, u
 			"Content-Type": "application/json",
 		},
 	}
-	
+
 	return q.CreateTask(ctx, task)
 }
 
@@ -229,12 +229,12 @@ func (q *LocalTaskQueue) CreateHTTPTask(ctx context.Context, queueName string, u
 func (q *LocalTaskQueue) DeleteTask(ctx context.Context, queueName string, taskName string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	
+
 	tasks, ok := q.tasks[queueName]
 	if !ok {
 		return fmt.Errorf("queue not found: %s", queueName)
 	}
-	
+
 	for i, task := range tasks {
 		if task.Name == taskName {
 			q.tasks[queueName] = append(tasks[:i], tasks[i+1:]...)
@@ -242,7 +242,7 @@ func (q *LocalTaskQueue) DeleteTask(ctx context.Context, queueName string, taskN
 			return nil
 		}
 	}
-	
+
 	return fmt.Errorf("task not found: %s", taskName)
 }
 
@@ -250,10 +250,10 @@ func (q *LocalTaskQueue) DeleteTask(ctx context.Context, queueName string, taskN
 func (q *LocalTaskQueue) PurgeQueue(ctx context.Context, queueName string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	
+
 	count := len(q.tasks[queueName])
 	delete(q.tasks, queueName)
-	
+
 	common.Info("[LOCAL_TASKS] Purged %d tasks from queue: %s", count, queueName)
 	return nil
 }
@@ -262,16 +262,16 @@ func (q *LocalTaskQueue) PurgeQueue(ctx context.Context, queueName string) error
 func (q *LocalTaskQueue) GetQueueStats(ctx context.Context, queueName string) (*QueueStats, error) {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
-	
+
 	tasks, ok := q.tasks[queueName]
 	if !ok {
 		return &QueueStats{}, nil
 	}
-	
+
 	stats := &QueueStats{
 		TasksCount: int64(len(tasks)),
 	}
-	
+
 	// Find oldest task
 	var oldestTime time.Time
 	for _, task := range tasks {
@@ -279,11 +279,11 @@ func (q *LocalTaskQueue) GetQueueStats(ctx context.Context, queueName string) (*
 			oldestTime = task.ScheduleAt
 		}
 	}
-	
+
 	if !oldestTime.IsZero() {
 		stats.OldestTaskAge = time.Since(oldestTime)
 	}
-	
+
 	return stats, nil
 }
 
@@ -296,10 +296,10 @@ func (q *LocalTaskQueue) Stop() {
 // processLocalTasks processes tasks in the background (for local development)
 func (q *LocalTaskQueue) processLocalTasks() {
 	defer q.wg.Done()
-	
+
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-q.stopChan:
@@ -313,12 +313,12 @@ func (q *LocalTaskQueue) processLocalTasks() {
 func (q *LocalTaskQueue) processPendingTasks() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	
+
 	now := time.Now()
-	
+
 	for queueName, tasks := range q.tasks {
 		var remaining []*Task
-		
+
 		for _, task := range tasks {
 			// Check if task is ready to execute
 			if task.ScheduleAt.IsZero() || task.ScheduleAt.Before(now) {
@@ -328,17 +328,17 @@ func (q *LocalTaskQueue) processPendingTasks() {
 				remaining = append(remaining, task)
 			}
 		}
-		
+
 		q.tasks[queueName] = remaining
 	}
 }
 
 func (q *LocalTaskQueue) executeLocalTask(task *Task) {
 	common.Debug("[LOCAL_TASKS] Executing task: %s -> %s", task.Name, task.URL)
-	
+
 	// In local development, we just log the task execution
 	// In production, this would make an actual HTTP request
-	
+
 	if task.Payload != nil {
 		data, _ := json.MarshalIndent(task.Payload, "", "  ")
 		common.Debug("[LOCAL_TASKS] Task payload: %s", string(data))

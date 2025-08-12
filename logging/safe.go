@@ -80,7 +80,7 @@ func init() {
 // NewLogger creates a new logger instance
 func NewLogger() *Logger {
 	isDebug := os.Getenv("DEBUG") == "true" || os.Getenv("ISDEBUG") == "true"
-	
+
 	return &Logger{
 		level:         InfoLevel,
 		sanitizer:     NewLogSanitizer(),
@@ -148,7 +148,7 @@ func (l *Logger) log(level LogLevel, format string, v ...interface{}) {
 		l.mu.RUnlock()
 		return
 	}
-	
+
 	jsonOutput := l.jsonOutput
 	includeSource := l.includeSource
 	prefix := l.prefix
@@ -156,15 +156,15 @@ func (l *Logger) log(level LogLevel, format string, v ...interface{}) {
 
 	// Format the message
 	message := fmt.Sprintf(format, v...)
-	
+
 	// Sanitize the message to remove PII
 	message = l.sanitizer.Sanitize(message)
-	
+
 	// Add prefix if set
 	if prefix != "" {
 		message = prefix + " " + message
 	}
-	
+
 	// Get source information if enabled
 	var source string
 	if includeSource {
@@ -178,7 +178,7 @@ func (l *Logger) log(level LogLevel, format string, v ...interface{}) {
 			source = fmt.Sprintf("%s:%d", file, line)
 		}
 	}
-	
+
 	// Output the log
 	if jsonOutput {
 		entry := LogEntry{
@@ -187,7 +187,7 @@ func (l *Logger) log(level LogLevel, format string, v ...interface{}) {
 			Message:   message,
 			Source:    source,
 		}
-		
+
 		data, _ := json.Marshal(entry)
 		log.Println(string(data))
 	} else {

@@ -53,11 +53,11 @@ const (
 
 // TenantLimits defines resource limits for a tenant
 type TenantLimits struct {
-	MaxUsers        int `json:"max_users" datastore:"max_users"`
-	MaxStorage      int `json:"max_storage_gb" datastore:"max_storage_gb"`
-	MaxAPICallsDay  int `json:"max_api_calls_day" datastore:"max_api_calls_day"`
-	MaxConcurrent   int `json:"max_concurrent" datastore:"max_concurrent"`
-	CustomLimits    map[string]int `json:"custom_limits" datastore:"custom_limits,noindex"`
+	MaxUsers       int            `json:"max_users" datastore:"max_users"`
+	MaxStorage     int            `json:"max_storage_gb" datastore:"max_storage_gb"`
+	MaxAPICallsDay int            `json:"max_api_calls_day" datastore:"max_api_calls_day"`
+	MaxConcurrent  int            `json:"max_concurrent" datastore:"max_concurrent"`
+	CustomLimits   map[string]int `json:"custom_limits" datastore:"custom_limits,noindex"`
 }
 
 // TenantContext provides tenant-aware context
@@ -70,39 +70,39 @@ type TenantContext struct {
 type Manager interface {
 	// CreateTenant creates a new tenant
 	CreateTenant(ctx context.Context, tenant *Tenant) error
-	
+
 	// GetTenant retrieves a tenant by ID
 	GetTenant(ctx context.Context, tenantID string) (*Tenant, error)
-	
+
 	// GetTenantByDomain retrieves a tenant by domain
 	GetTenantByDomain(ctx context.Context, domain string) (*Tenant, error)
-	
+
 	// UpdateTenant updates a tenant
 	UpdateTenant(ctx context.Context, tenant *Tenant) error
-	
+
 	// DeleteTenant soft deletes a tenant
 	DeleteTenant(ctx context.Context, tenantID string) error
-	
+
 	// ListTenants lists all tenants with optional filtering
 	ListTenants(ctx context.Context, filter *TenantFilter) ([]*Tenant, error)
-	
+
 	// ValidateTenantAccess validates if a user has access to a tenant
 	ValidateTenantAccess(ctx context.Context, tenantID string, userID string) error
-	
+
 	// GetTenantContext creates a tenant-aware context
 	GetTenantContext(ctx context.Context, tenantID string) (context.Context, error)
-	
+
 	// CheckLimit checks if a tenant has exceeded a limit
 	CheckLimit(ctx context.Context, tenantID string, limitName string, value int) error
 }
 
 // TenantFilter provides filtering options for listing tenants
 type TenantFilter struct {
-	Status   TenantStatus
-	Plan     string
-	Domain   string
-	Limit    int
-	Offset   int
+	Status TenantStatus
+	Plan   string
+	Domain string
+	Limit  int
+	Offset int
 }
 
 // DefaultManager implements the Manager interface
@@ -125,57 +125,57 @@ func NewManager() Manager {
 func (m *DefaultManager) CreateTenant(ctx context.Context, tenant *Tenant) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Validate tenant
 	if tenant.ID == "" {
 		tenant.ID = generateTenantID()
 	}
-	
+
 	if tenant.Name == "" {
 		return fmt.Errorf("tenant name is required")
 	}
-	
+
 	// Check for duplicate ID
 	if _, exists := m.tenants[tenant.ID]; exists {
 		return fmt.Errorf("tenant with ID %s already exists", tenant.ID)
 	}
-	
+
 	// Check for duplicate domain
 	if tenant.Domain != "" {
 		if _, exists := m.domains[tenant.Domain]; exists {
 			return fmt.Errorf("domain %s is already registered", tenant.Domain)
 		}
 	}
-	
+
 	// Set defaults
 	if tenant.Status == "" {
 		tenant.Status = TenantStatusTrial
 	}
-	
+
 	if tenant.Plan == "" {
 		tenant.Plan = "free"
 	}
-	
+
 	if tenant.Limits == nil {
 		tenant.Limits = getDefaultLimits(tenant.Plan)
 	}
-	
+
 	now := time.Now()
 	tenant.CreatedAt = now
 	tenant.UpdatedAt = now
-	
+
 	// Set trial period if applicable
 	if tenant.Status == TenantStatusTrial && tenant.TrialEndsAt == nil {
 		trialEnd := now.Add(14 * 24 * time.Hour) // 14 days trial
 		tenant.TrialEndsAt = &trialEnd
 	}
-	
+
 	// Store tenant
 	m.tenants[tenant.ID] = tenant
 	if tenant.Domain != "" {
 		m.domains[tenant.Domain] = tenant.ID
 	}
-	
+
 	common.Info("[TENANT] Created tenant: %s (%s)", tenant.ID, tenant.Name)
 	return nil
 }
@@ -184,12 +184,12 @@ func (m *DefaultManager) CreateTenant(ctx context.Context, tenant *Tenant) error
 func (m *DefaultManager) GetTenant(ctx context.Context, tenantID string) (*Tenant, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	tenant, exists := m.tenants[tenantID]
 	if !exists {
 		return nil, fmt.Errorf("tenant not found: %s", tenantID)
 	}
-	
+
 	return tenant, nil
 }
 
@@ -197,12 +197,12 @@ func (m *DefaultManager) GetTenant(ctx context.Context, tenantID string) (*Tenan
 func (m *DefaultManager) GetTenantByDomain(ctx context.Context, domain string) (*Tenant, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	tenantID, exists := m.domains[domain]
 	if !exists {
 		return nil, fmt.Errorf("no tenant found for domain: %s", domain)
 	}
-	
+
 	return m.tenants[tenantID], nil
 }
 
@@ -210,12 +210,12 @@ func (m *DefaultManager) GetTenantByDomain(ctx context.Context, domain string) (
 func (m *DefaultManager) UpdateTenant(ctx context.Context, tenant *Tenant) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	existing, exists := m.tenants[tenant.ID]
 	if !exists {
 		return fmt.Errorf("tenant not found: %s", tenant.ID)
 	}
-	
+
 	// Update domain mapping if changed
 	if existing.Domain != tenant.Domain {
 		if existing.Domain != "" {
@@ -229,10 +229,10 @@ func (m *DefaultManager) UpdateTenant(ctx context.Context, tenant *Tenant) error
 			m.domains[tenant.Domain] = tenant.ID
 		}
 	}
-	
+
 	tenant.UpdatedAt = time.Now()
 	m.tenants[tenant.ID] = tenant
-	
+
 	common.Info("[TENANT] Updated tenant: %s", tenant.ID)
 	return nil
 }
@@ -241,21 +241,21 @@ func (m *DefaultManager) UpdateTenant(ctx context.Context, tenant *Tenant) error
 func (m *DefaultManager) DeleteTenant(ctx context.Context, tenantID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	tenant, exists := m.tenants[tenantID]
 	if !exists {
 		return fmt.Errorf("tenant not found: %s", tenantID)
 	}
-	
+
 	// Soft delete - mark as deleted
 	tenant.Status = TenantStatusDeleted
 	tenant.UpdatedAt = time.Now()
-	
+
 	// Remove domain mapping
 	if tenant.Domain != "" {
 		delete(m.domains, tenant.Domain)
 	}
-	
+
 	common.Info("[TENANT] Deleted tenant: %s", tenantID)
 	return nil
 }
@@ -264,9 +264,9 @@ func (m *DefaultManager) DeleteTenant(ctx context.Context, tenantID string) erro
 func (m *DefaultManager) ListTenants(ctx context.Context, filter *TenantFilter) ([]*Tenant, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	var results []*Tenant
-	
+
 	for _, tenant := range m.tenants {
 		// Apply filters
 		if filter != nil {
@@ -280,25 +280,25 @@ func (m *DefaultManager) ListTenants(ctx context.Context, filter *TenantFilter) 
 				continue
 			}
 		}
-		
+
 		results = append(results, tenant)
 	}
-	
+
 	// Apply pagination
 	if filter != nil && filter.Limit > 0 {
 		start := filter.Offset
 		if start > len(results) {
 			return []*Tenant{}, nil
 		}
-		
+
 		end := start + filter.Limit
 		if end > len(results) {
 			end = len(results)
 		}
-		
+
 		results = results[start:end]
 	}
-	
+
 	return results, nil
 }
 
@@ -308,22 +308,22 @@ func (m *DefaultManager) ValidateTenantAccess(ctx context.Context, tenantID stri
 	if err != nil {
 		return err
 	}
-	
+
 	// Check if tenant is active
 	if tenant.Status != TenantStatusActive && tenant.Status != TenantStatusTrial {
 		return fmt.Errorf("tenant is not active: %s", tenant.Status)
 	}
-	
+
 	// Check trial expiration
 	if tenant.Status == TenantStatusTrial && tenant.TrialEndsAt != nil {
 		if time.Now().After(*tenant.TrialEndsAt) {
 			return fmt.Errorf("trial period has expired")
 		}
 	}
-	
+
 	// In production, check user-tenant association
 	// For now, we'll assume access is granted
-	
+
 	return nil
 }
 
@@ -333,7 +333,7 @@ func (m *DefaultManager) GetTenantContext(ctx context.Context, tenantID string) 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return WithTenant(ctx, tenant), nil
 }
 
@@ -343,11 +343,11 @@ func (m *DefaultManager) CheckLimit(ctx context.Context, tenantID string, limitN
 	if err != nil {
 		return err
 	}
-	
+
 	if tenant.Limits == nil {
 		return nil // No limits configured
 	}
-	
+
 	var limit int
 	switch limitName {
 	case "users":
@@ -363,11 +363,11 @@ func (m *DefaultManager) CheckLimit(ctx context.Context, tenantID string, limitN
 			limit = tenant.Limits.CustomLimits[limitName]
 		}
 	}
-	
+
 	if limit > 0 && value > limit {
 		return fmt.Errorf("tenant limit exceeded: %s (current: %d, limit: %d)", limitName, value, limit)
 	}
-	
+
 	return nil
 }
 
@@ -434,7 +434,7 @@ func TenantMiddleware(manager Manager) func(next func(context.Context) error) fu
 		return func(ctx context.Context) error {
 			// Extract tenant from context (e.g., from domain, header, or path)
 			// This is a simplified example
-			
+
 			// For now, just pass through
 			return next(ctx)
 		}

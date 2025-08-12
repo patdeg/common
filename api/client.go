@@ -34,13 +34,13 @@ import (
 
 // Client represents an HTTP API client
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
-	auth       Authenticator
+	baseURL     string
+	httpClient  *http.Client
+	auth        Authenticator
 	rateLimiter *rate.Limiter
 	retryConfig *RetryConfig
-	headers    map[string]string
-	mu         sync.RWMutex
+	headers     map[string]string
+	mu          sync.RWMutex
 }
 
 // ClientConfig configures the API client
@@ -48,7 +48,7 @@ type ClientConfig struct {
 	BaseURL     string
 	Timeout     time.Duration
 	Auth        Authenticator
-	RateLimit   int           // Requests per second
+	RateLimit   int // Requests per second
 	RetryConfig *RetryConfig
 	Headers     map[string]string
 }
@@ -66,7 +66,7 @@ type RetryConfig struct {
 type Authenticator interface {
 	// Authenticate adds authentication to a request
 	Authenticate(req *http.Request) error
-	
+
 	// Refresh refreshes authentication credentials if needed
 	Refresh(ctx context.Context) error
 }
@@ -103,11 +103,11 @@ func NewClient(config ClientConfig) *Client {
 	if config.Timeout == 0 {
 		config.Timeout = 30 * time.Second
 	}
-	
+
 	if config.RetryConfig == nil {
 		config.RetryConfig = DefaultRetryConfig()
 	}
-	
+
 	client := &Client{
 		baseURL: strings.TrimRight(config.BaseURL, "/"),
 		httpClient: &http.Client{
@@ -117,11 +117,11 @@ func NewClient(config ClientConfig) *Client {
 		retryConfig: config.RetryConfig,
 		headers:     config.Headers,
 	}
-	
+
 	if config.RateLimit > 0 {
 		client.rateLimiter = rate.NewLimiter(rate.Limit(config.RateLimit), 1)
 	}
-	
+
 	return client
 }
 
@@ -133,20 +133,20 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 			return nil, fmt.Errorf("rate limiter error: %v", err)
 		}
 	}
-	
+
 	// Build HTTP request
 	httpReq, err := c.buildRequest(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %v", err)
 	}
-	
+
 	// Add authentication
 	if c.auth != nil {
 		if err := c.auth.Authenticate(httpReq); err != nil {
 			return nil, fmt.Errorf("authentication failed: %v", err)
 		}
 	}
-	
+
 	// Execute with retry
 	return c.doWithRetry(ctx, httpReq)
 }
@@ -190,7 +190,7 @@ func (c *Client) Delete(ctx context.Context, path string) (*Response, error) {
 func (c *Client) SetHeader(key, value string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if c.headers == nil {
 		c.headers = make(map[string]string)
 	}
@@ -204,11 +204,11 @@ func (c *Client) buildRequest(ctx context.Context, req *Request) (*http.Request,
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if req.Query != nil {
 		u.RawQuery = req.Query.Encode()
 	}
-	
+
 	// Build body
 	var body io.Reader
 	if req.Body != nil {
@@ -218,30 +218,30 @@ func (c *Client) buildRequest(ctx context.Context, req *Request) (*http.Request,
 		}
 		body = bytes.NewReader(jsonData)
 	}
-	
+
 	// Create request
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, u.String(), body)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Set default headers
 	c.mu.RLock()
 	for k, v := range c.headers {
 		httpReq.Header.Set(k, v)
 	}
 	c.mu.RUnlock()
-	
+
 	// Set request headers
 	for k, v := range req.Headers {
 		httpReq.Header.Set(k, v)
 	}
-	
+
 	// Set content type for body
 	if req.Body != nil && httpReq.Header.Get("Content-Type") == "" {
 		httpReq.Header.Set("Content-Type", "application/json")
 	}
-	
+
 	return httpReq, nil
 }
 
@@ -249,7 +249,7 @@ func (c *Client) buildRequest(ctx context.Context, req *Request) (*http.Request,
 func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*Response, error) {
 	var lastErr error
 	wait := c.retryConfig.InitialWait
-	
+
 	for attempt := 0; attempt <= c.retryConfig.MaxRetries; attempt++ {
 		if attempt > 0 {
 			// Wait before retry
@@ -258,16 +258,16 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*Response,
 				return nil, ctx.Err()
 			case <-time.After(wait):
 			}
-			
+
 			// Increase wait time
 			wait = time.Duration(float64(wait) * c.retryConfig.Multiplier)
 			if wait > c.retryConfig.MaxWait {
 				wait = c.retryConfig.MaxWait
 			}
-			
+
 			common.Debug("[API] Retrying request (attempt %d/%d)", attempt, c.retryConfig.MaxRetries)
 		}
-		
+
 		// Clone request for retry
 		reqCopy := req.Clone(ctx)
 		if req.Body != nil {
@@ -276,14 +276,14 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*Response,
 				seeker.Seek(0, io.SeekStart)
 			}
 		}
-		
+
 		// Execute request
 		resp, err := c.httpClient.Do(reqCopy)
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		
+
 		// Read response body
 		bodyData, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -291,19 +291,19 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*Response,
 			lastErr = fmt.Errorf("failed to read response: %v", err)
 			continue
 		}
-		
+
 		response := &Response{
 			StatusCode: resp.StatusCode,
 			Headers:    resp.Header,
 			Body:       bodyData,
 		}
-		
+
 		// Check if we should retry
 		if c.shouldRetry(resp.StatusCode) && attempt < c.retryConfig.MaxRetries {
 			lastErr = fmt.Errorf("received status %d", resp.StatusCode)
 			continue
 		}
-		
+
 		// Check for error status
 		if resp.StatusCode >= 400 {
 			var apiErr Error
@@ -317,10 +317,10 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*Response,
 			}
 			return response, &apiErr
 		}
-		
+
 		return response, nil
 	}
-	
+
 	return nil, fmt.Errorf("request failed after %d retries: %v", c.retryConfig.MaxRetries, lastErr)
 }
 
@@ -413,7 +413,7 @@ func (r *RESTClient) GetJSON(ctx context.Context, path string, query url.Values,
 	if err != nil {
 		return err
 	}
-	
+
 	return json.Unmarshal(resp.Body, result)
 }
 
@@ -423,7 +423,7 @@ func (r *RESTClient) PostJSON(ctx context.Context, path string, body, result int
 	if err != nil {
 		return err
 	}
-	
+
 	if result != nil {
 		return json.Unmarshal(resp.Body, result)
 	}
@@ -436,7 +436,7 @@ func (r *RESTClient) PutJSON(ctx context.Context, path string, body, result inte
 	if err != nil {
 		return err
 	}
-	
+
 	if result != nil {
 		return json.Unmarshal(resp.Body, result)
 	}
@@ -449,7 +449,7 @@ func (r *RESTClient) DeleteJSON(ctx context.Context, path string, result interfa
 	if err != nil {
 		return err
 	}
-	
+
 	if result != nil && len(resp.Body) > 0 {
 		return json.Unmarshal(resp.Body, result)
 	}
@@ -464,30 +464,30 @@ func (r *RESTClient) Paginate(ctx context.Context, path string, pageSize int, ha
 			"page":      []string{fmt.Sprintf("%d", page)},
 			"page_size": []string{fmt.Sprintf("%d", pageSize)},
 		}
-		
+
 		var result struct {
 			Data     json.RawMessage `json:"data"`
-			HasMore  bool           `json:"has_more"`
-			NextPage int            `json:"next_page"`
+			HasMore  bool            `json:"has_more"`
+			NextPage int             `json:"next_page"`
 		}
-		
+
 		if err := r.GetJSON(ctx, path, query, &result); err != nil {
 			return err
 		}
-		
+
 		if err := handler(result.Data); err != nil {
 			return err
 		}
-		
+
 		if !result.HasMore {
 			break
 		}
-		
+
 		page = result.NextPage
 		if page == 0 {
 			page++
 		}
 	}
-	
+
 	return nil
 }

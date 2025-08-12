@@ -27,7 +27,7 @@ import (
 type LogSanitizer struct {
 	mu       sync.RWMutex
 	patterns map[string]*regexp.Regexp
-	
+
 	// Configuration options
 	maskEmails     bool
 	maskIPs        bool
@@ -48,10 +48,10 @@ func NewLogSanitizer() *LogSanitizer {
 		maskPhone:      true,
 		maskCustom:     make(map[string]*regexp.Regexp),
 	}
-	
+
 	// Initialize default patterns
 	ls.initPatterns()
-	
+
 	return ls
 }
 
@@ -59,26 +59,26 @@ func NewLogSanitizer() *LogSanitizer {
 func (ls *LogSanitizer) initPatterns() {
 	// Email pattern
 	ls.patterns["email"] = regexp.MustCompile(`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`)
-	
+
 	// IP address patterns (both IPv4 and IPv6)
 	ls.patterns["ipv4"] = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
 	ls.patterns["ipv6"] = regexp.MustCompile(`\b(?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}\b`)
-	
+
 	// Credit card pattern (basic - matches 13-19 digit sequences)
 	ls.patterns["creditcard"] = regexp.MustCompile(`\b(?:\d[ -]*?){13,19}\b`)
-	
+
 	// SSN pattern (US Social Security Number)
 	ls.patterns["ssn"] = regexp.MustCompile(`\b\d{3}-\d{2}-\d{4}\b|\b\d{9}\b`)
-	
+
 	// Phone number patterns (various formats)
 	ls.patterns["phone"] = regexp.MustCompile(`\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b`)
-	
+
 	// API key patterns (common formats)
 	ls.patterns["apikey"] = regexp.MustCompile(`\b(api[_-]?key|apikey|api_secret|api[_-]?token)[\s]*[:=][\s]*['"]?[\w-]{20,}['"]?\b`)
-	
+
 	// JWT token pattern
 	ls.patterns["jwt"] = regexp.MustCompile(`\beyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\b`)
-	
+
 	// Password in query strings or JSON
 	ls.patterns["password"] = regexp.MustCompile(`(password|passwd|pwd|pass)[\s]*[:=][\s]*['"]?[^'"\s,}]+['"]?`)
 }
@@ -87,75 +87,75 @@ func (ls *LogSanitizer) initPatterns() {
 func (ls *LogSanitizer) Sanitize(message string) string {
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
-	
+
 	// Apply email masking
 	if ls.maskEmails {
 		message = ls.patterns["email"].ReplaceAllStringFunc(message, maskEmail)
 	}
-	
+
 	// Apply IP masking
 	if ls.maskIPs {
 		message = ls.patterns["ipv4"].ReplaceAllString(message, "xxx.xxx.xxx.xxx")
 		message = ls.patterns["ipv6"].ReplaceAllString(message, "xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx")
 	}
-	
+
 	// Apply credit card masking
 	if ls.maskCreditCard {
 		message = ls.patterns["creditcard"].ReplaceAllStringFunc(message, maskCreditCard)
 	}
-	
+
 	// Apply SSN masking
 	if ls.maskSSN {
 		message = ls.patterns["ssn"].ReplaceAllString(message, "xxx-xx-xxxx")
 	}
-	
+
 	// Apply phone masking
 	if ls.maskPhone {
 		message = ls.patterns["phone"].ReplaceAllStringFunc(message, maskPhone)
 	}
-	
+
 	// Always mask API keys and passwords
 	message = ls.patterns["apikey"].ReplaceAllString(message, "$1=***REDACTED***")
 	message = ls.patterns["jwt"].ReplaceAllString(message, "***JWT_REDACTED***")
 	message = ls.patterns["password"].ReplaceAllString(message, "$1=***REDACTED***")
-	
+
 	// Apply custom patterns
 	for name, pattern := range ls.maskCustom {
 		message = pattern.ReplaceAllString(message, fmt.Sprintf("***%s_REDACTED***", strings.ToUpper(name)))
 	}
-	
+
 	return message
 }
 
 // SanitizeStruct sanitizes a struct by masking PII in string fields
 func (ls *LogSanitizer) SanitizeStruct(data interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
-	
+
 	// Use reflection to iterate through struct fields
 	v := reflect.ValueOf(data)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}
-	
+
 	if v.Kind() != reflect.Struct {
 		// If not a struct, try to marshal and return as-is
 		result["value"] = ls.sanitizeValue(data)
 		return result
 	}
-	
+
 	t := v.Type()
 	for i := 0; i < v.NumField(); i++ {
 		field := t.Field(i)
 		value := v.Field(i)
-		
+
 		// Skip unexported fields
 		if !value.CanInterface() {
 			continue
 		}
-		
+
 		fieldName := field.Name
 		fieldValue := value.Interface()
-		
+
 		// Check if field name suggests PII
 		lowerName := strings.ToLower(fieldName)
 		if containsPIIFieldName(lowerName) {
@@ -164,7 +164,7 @@ func (ls *LogSanitizer) SanitizeStruct(data interface{}) map[string]interface{} 
 			result[fieldName] = ls.sanitizeValue(fieldValue)
 		}
 	}
-	
+
 	return result
 }
 
@@ -196,11 +196,11 @@ func (ls *LogSanitizer) AddCustomPattern(name string, pattern string) error {
 	if err != nil {
 		return fmt.Errorf("invalid regex pattern: %w", err)
 	}
-	
+
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	ls.maskCustom[name] = re
-	
+
 	return nil
 }
 
@@ -226,23 +226,23 @@ func maskEmail(email string) string {
 	if len(parts) != 2 {
 		return "***@***.***"
 	}
-	
+
 	local := parts[0]
 	domain := parts[1]
-	
+
 	// Mask local part
 	if len(local) > 2 {
 		local = local[:1] + "***" + local[len(local)-1:]
 	} else {
 		local = "***"
 	}
-	
+
 	// Partially mask domain
 	domainParts := strings.Split(domain, ".")
 	if len(domainParts) > 1 {
 		domainParts[0] = "***"
 	}
-	
+
 	return local + "@" + strings.Join(domainParts, ".")
 }
 
@@ -277,12 +277,12 @@ func containsPIIFieldName(name string) bool {
 		"dob", "birth", "age",
 		"salary", "income", "wage",
 	}
-	
+
 	for _, field := range piiFields {
 		if strings.Contains(name, field) {
 			return true
 		}
 	}
-	
+
 	return false
 }
