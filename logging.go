@@ -144,3 +144,35 @@ func Error(format string, v ...interface{}) {
 		}()
 	}
 }
+
+// Fatal logs an error message with "FATAL: " prefix and exits the program.
+// This is used for unrecoverable errors during startup or critical failures.
+// The function logs the message and then calls os.Exit(1).
+func Fatal(format string, v ...interface{}) {
+	errorMsg := fmt.Sprintf(format, v...)
+	log.Printf("FATAL: "+errorMsg+"\n")
+	
+	// Store in Datastore if configured (best effort, don't wait)
+	if ERROR_DATASTORE_ENTITY != "" && errorClient != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			
+			// Create error entity with metadata
+			errorEntry := getAppEngineMetadata()
+			errorEntry.Timestamp = time.Now()
+			errorEntry.Message = "FATAL: " + errorMsg
+			
+			// Use timestamp as key for uniqueness
+			keyName := fmt.Sprintf("%d", time.Now().UnixNano())
+			key := datastore.NameKey(ERROR_DATASTORE_ENTITY, keyName, nil)
+			
+			// Store in Datastore (fire and forget)
+			errorClient.Put(ctx, key, &errorEntry)
+		}()
+	}
+	
+	// Give a brief moment for the log to be written
+	time.Sleep(100 * time.Millisecond)
+	os.Exit(1)
+}
