@@ -19,7 +19,78 @@
 
 package common
 
-import "log"
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"cloud.google.com/go/datastore"
+)
+
+var (
+	// ERROR_DATASTORE_ENTITY holds the Datastore entity name for error logging.
+	// When set, the Error() function will store errors in Datastore.
+	// Example: "Error" for production, "UAT_Error" for UAT, "DEV_Error" for development
+	ERROR_DATASTORE_ENTITY string
+
+	// Global datastore client for error logging
+	errorClient *datastore.Client
+)
+
+// Error represents an error entry stored in Datastore
+type ErrorEntity struct {
+	Timestamp     time.Time `datastore:"timestamp"`
+	Message       string    `datastore:"message"`
+	GAEApplication string   `datastore:"gae_application,omitempty"`
+	GAEService    string    `datastore:"gae_service,omitempty"`
+	GAEVersion    string    `datastore:"gae_version,omitempty"`
+	GAEInstance   string    `datastore:"gae_instance,omitempty"`
+	GAEMemoryMB   string    `datastore:"gae_memory_mb,omitempty"`
+	GAEEnv        string    `datastore:"gae_env,omitempty"`
+	GAERuntime    string    `datastore:"gae_runtime,omitempty"`
+	ProjectID     string    `datastore:"project_id,omitempty"`
+	Environment   string    `datastore:"environment,omitempty"`
+}
+
+// getAppEngineMetadata collects useful App Engine runtime environment variables
+func getAppEngineMetadata() ErrorEntity {
+	return ErrorEntity{
+		GAEApplication: os.Getenv("GAE_APPLICATION"),
+		GAEService:     os.Getenv("GAE_SERVICE"),
+		GAEVersion:     os.Getenv("GAE_VERSION"),
+		GAEInstance:    os.Getenv("GAE_INSTANCE"),
+		GAEMemoryMB:    os.Getenv("GAE_MEMORY_MB"),
+		GAEEnv:         os.Getenv("GAE_ENV"),
+		GAERuntime:     os.Getenv("GAE_RUNTIME"),
+		ProjectID:      os.Getenv("PROJECT_ID"),
+		Environment:    os.Getenv("APP_ENV"),
+	}
+}
+
+// InitErrorDatastore initializes the error logging datastore client
+func InitErrorDatastore() error {
+	if ERROR_DATASTORE_ENTITY == "" {
+		return nil // No entity name set, skip initialization
+	}
+
+	projectID := os.Getenv("PROJECT_ID")
+	if projectID == "" {
+		projectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
+	}
+	if projectID == "" {
+		return fmt.Errorf("PROJECT_ID not configured")
+	}
+
+	ctx := context.Background()
+	client, err := datastore.NewClient(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("failed to create datastore client: %v", err)
+	}
+	errorClient = client
+	return nil
+}
 
 // Debug writes a formatted debug message when ISDEBUG is true.
 // A newline is appended so callers do not have to include one.
@@ -45,6 +116,31 @@ func Warn(format string, v ...interface{}) {
 
 // Error writes a formatted error message with an "ERROR:" prefix.
 // The prefix helps grep for errors in log files.
+// If ERROR_DATASTORE_ENTITY is set, also stores the error in Datastore.
 func Error(format string, v ...interface{}) {
-	log.Printf("ERROR: "+format+"\n", v...)
+	errorMsg := fmt.Sprintf(format, v...)
+	log.Printf("ERROR: "+errorMsg+"\n")
+
+	// Store in Datastore if configured
+	if ERROR_DATASTORE_ENTITY != "" && errorClient != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			// Create error entity with metadata
+			errorEntry := getAppEngineMetadata()
+			errorEntry.Timestamp = time.Now()
+			errorEntry.Message = errorMsg
+
+			// Use timestamp as key for uniqueness
+			keyName := fmt.Sprintf("%d", time.Now().UnixNano())
+			key := datastore.NameKey(ERROR_DATASTORE_ENTITY, keyName, nil)
+
+			// Store in Datastore (non-blocking)
+			if _, err := errorClient.Put(ctx, key, &errorEntry); err != nil {
+				// Log to stdout if Datastore storage fails, but don't recurse
+				log.Printf("WARNING: Failed to store error in Datastore: %v\n", err)
+			}
+		}()
+	}
 }
