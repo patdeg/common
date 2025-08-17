@@ -18,6 +18,7 @@ package datastore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -336,17 +337,32 @@ func isLocalDevelopment() bool {
 }
 
 func copyValue(src, dest interface{}) error {
-	// This is a simplified copy function
-	// In production, use encoding/gob or similar for deep copying
-	// For now, assume dest is a pointer and can be assigned
-	// This would need proper implementation based on actual types
-	return fmt.Errorf("copyValue not fully implemented")
+	// Use JSON encoding/decoding for deep copy
+	// This ensures cached data is properly isolated from the original
+	data, err := json.Marshal(src)
+	if err != nil {
+		return fmt.Errorf("failed to marshal source: %w", err)
+	}
+	if err := json.Unmarshal(data, dest); err != nil {
+		return fmt.Errorf("failed to unmarshal to destination: %w", err)
+	}
+	return nil
 }
 
 func deepCopy(src interface{}) interface{} {
-	// This is a simplified deep copy
-	// In production, use encoding/gob or similar
-	return src
+	// Use JSON for deep copy to ensure isolation
+	data, err := json.Marshal(src)
+	if err != nil {
+		// If marshaling fails, return the original (best effort)
+		return src
+	}
+	
+	var result interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		// If unmarshaling fails, return the original (best effort)
+		return src
+	}
+	return result
 }
 
 // BaseEntity provides common fields for all entities
