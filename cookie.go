@@ -86,7 +86,8 @@ func DoesCookieExists(r *http.Request) bool {
 // The created cookie is secured with the following attributes:
 //   - Path is always set to "/" so the ID is sent for all application routes.
 //   - Expires is 30 days in the future, giving the cookie a one month lifetime.
-//   - HttpOnly and Secure are true to prevent JavaScript access and require HTTPS.
+//   - HttpOnly is true to prevent JavaScript access.
+//   - Secure is true for production (false for localhost/127.0.0.1) to support local development.
 //   - SameSite is Lax to protect against CSRF while allowing normal navigation.
 //   - Domain is only set when the host is neither localhost nor 127.0.0.1.
 func GetCookieID(w http.ResponseWriter, r *http.Request) string {
@@ -104,16 +105,20 @@ func GetCookieID(w http.ResponseWriter, r *http.Request) string {
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
 		}
+		
+		// Determine if we're on localhost for development
+		isLocalhost := host == "localhost" || host == "127.0.0.1"
+		
 		ck := &http.Cookie{
 			Name:     "ID",
 			Value:    id,
 			Path:     "/",
 			Expires:  time.Now().Add(time.Hour * 24 * 30),
 			HttpOnly: true,
-			Secure:   true, // only send the cookie over HTTPS
+			Secure:   !isLocalhost, // false for localhost, true for production
 			SameSite: http.SameSiteLaxMode,
 		}
-		if host != "localhost" && host != "127.0.0.1" {
+		if !isLocalhost {
 			// Set the domain so the cookie is shared across subdomains
 			ck.Domain = host
 		}

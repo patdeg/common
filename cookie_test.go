@@ -86,6 +86,30 @@ func TestGetCookieIDLocalhost(t *testing.T) {
 	}
 }
 
+// TestGetCookieIDSecureFlagLocalhost verifies that the Secure flag is false
+// when running on localhost to support local development.
+func TestGetCookieIDSecureFlagLocalhost(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "http://localhost/", nil)
+	r.Host = "localhost:8080"
+	_ = GetCookieID(w, r)
+	res := w.Result()
+	defer res.Body.Close()
+	var c *http.Cookie
+	for _, cookie := range res.Cookies() {
+		if cookie.Name == "ID" {
+			c = cookie
+			break
+		}
+	}
+	if c == nil {
+		t.Fatal("Set-Cookie header not found")
+	}
+	if c.Secure {
+		t.Error("Secure flag should be false on localhost")
+	}
+}
+
 // TestGetCookieIDLocalIP verifies that the domain attribute is omitted when the
 // host is an IP address on localhost.
 func TestGetCookieIDLocalIP(t *testing.T) {
@@ -107,5 +131,8 @@ func TestGetCookieIDLocalIP(t *testing.T) {
 	}
 	if c.Domain != "" {
 		t.Errorf("Domain = %q, want empty", c.Domain)
+	}
+	if c.Secure {
+		t.Error("Secure flag should be false on 127.0.0.1")
 	}
 }
