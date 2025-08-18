@@ -104,15 +104,15 @@ func TrackVisit(w http.ResponseWriter, r *http.Request, cookie string) {
 			Expiration: time.Minute * 30,
 		}
 		if err := memcache.Add(c, item); err == memcache.ErrNotStored {
-			common.Info("TrackEventDetails: item with key %q already exists", item.Key)
+			common.Info("TrackVisit: item with key %q already exists", item.Key)
 		} else if err != nil {
-			common.Error("TrackEventDetails: Error adding item: %v", err)
+			common.Error("TrackVisit: Error adding item: %v", err)
 		}
 	} else {
 		session = common.B2S(item.Value)
-		common.Info("TrackEventDetails: cookie in memcache: %v", session)
+		common.Info("TrackVisit: cookie in memcache: %v", session)
 	}
-	common.Info("TrackEventDetails: Session = %v", session)
+	common.Info("TrackVisit: Session = %v", session)
 
 	visit := &Visit{
 		Cookie:         cookie,
