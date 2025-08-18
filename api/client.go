@@ -250,6 +250,26 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*Response,
 	var lastErr error
 	wait := c.retryConfig.InitialWait
 
+	// Store the original request body bytes if present
+	var bodyBytes []byte
+	if req.Body != nil {
+		// Check if body is seekable
+		if _, ok := req.Body.(io.Seeker); ok {
+			// If seekable, we can reset it on retries
+			// Continue with normal flow
+		} else {
+			// Read the entire body to store for retries
+			var err error
+			bodyBytes, err = io.ReadAll(req.Body)
+			req.Body.Close()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read request body: %v", err)
+			}
+			// Set the body to a reader of the bytes for the first attempt
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		}
+	}
+
 	for attempt := 0; attempt <= c.retryConfig.MaxRetries; attempt++ {
 		if attempt > 0 {
 			// Wait before retry
@@ -271,9 +291,13 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*Response,
 		// Clone request for retry
 		reqCopy := req.Clone(ctx)
 		if req.Body != nil {
-			// Reset body for retry
-			if seeker, ok := req.Body.(io.Seeker); ok {
+			if bodyBytes != nil {
+				// Reset body using stored bytes
+				reqCopy.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			} else if seeker, ok := req.Body.(io.Seeker); ok {
+				// Reset seekable body
 				seeker.Seek(0, io.SeekStart)
+				reqCopy.Body = req.Body
 			}
 		}
 
