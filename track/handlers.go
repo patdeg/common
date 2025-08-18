@@ -153,8 +153,6 @@ func ClickHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate the destination to avoid redirecting to arbitrary schemes.
 	// Fallback to the site homepage when the URL is empty or invalid.
 	if !common.IsValidHTTPURL(url) {
-		url = "http://www.mygotome.com"
-	} else if !common.IsValidHTTPURL(url) {
 		common.Error("Invalid redirect URL: %v", url)
 		url = "http://www.mygotome.com"
 	}
