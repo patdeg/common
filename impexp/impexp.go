@@ -26,6 +26,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -241,14 +242,34 @@ func (e *DefaultExporter) ExportBatch(ctx context.Context, dataSource DataSource
 				}
 				first = false
 			case FormatCSV:
-				// Convert to CSV row
-				// This is simplified - in production, use reflection
+				// Convert to CSV row using reflection
 				csvWriter := csv.NewWriter(w)
 				if opts.Delimiter != 0 {
 					csvWriter.Comma = opts.Delimiter
 				}
-				// Write row (simplified)
+				
+				// Get headers from item if not already done
+				if len(opts.Headers) == 0 {
+					itemVal := reflect.ValueOf(item)
+					opts.Headers = getCSVHeaders(itemVal)
+					// Write headers on first item
+					if totalExported == 0 {
+						if err := csvWriter.Write(opts.Headers); err != nil {
+							return fmt.Errorf("failed to write CSV headers: %w", err)
+						}
+					}
+				}
+				
+				// Write row
+				itemVal := reflect.ValueOf(item)
+				row := getCSVRow(itemVal, opts.Headers)
+				if err := csvWriter.Write(row); err != nil {
+					return fmt.Errorf("failed to write CSV row: %w", err)
+				}
 				csvWriter.Flush()
+				if err := csvWriter.Error(); err != nil {
+					return fmt.Errorf("CSV writer error: %w", err)
+				}
 			}
 
 			totalExported++
@@ -283,19 +304,190 @@ func (e *DefaultExporter) exportCSV(data interface{}, w io.Writer, opts *Options
 		csvWriter.Comma = opts.Delimiter
 	}
 
-	// Write headers if provided
-	if len(opts.Headers) > 0 {
-		if err := csvWriter.Write(opts.Headers); err != nil {
-			return err
-		}
+	// Handle the data based on its type
+	val := reflect.ValueOf(data)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
 
-	// Convert data to CSV rows
-	// This is a simplified implementation
-	// In production, use reflection to handle various data types
+	switch val.Kind() {
+	case reflect.Slice, reflect.Array:
+		// Process slice/array of structs or maps
+		if val.Len() == 0 {
+			// Empty slice - write headers if provided
+			if len(opts.Headers) > 0 {
+				if err := csvWriter.Write(opts.Headers); err != nil {
+					return fmt.Errorf("failed to write CSV headers: %w", err)
+				}
+			}
+			csvWriter.Flush()
+			return csvWriter.Error()
+		}
+
+		// Get headers from first element if not provided
+		headers := opts.Headers
+		if len(headers) == 0 {
+			firstElem := val.Index(0)
+			headers = getCSVHeaders(firstElem)
+		}
+
+		// Write headers
+		if err := csvWriter.Write(headers); err != nil {
+			return fmt.Errorf("failed to write CSV headers: %w", err)
+		}
+
+		// Write data rows
+		for i := 0; i < val.Len(); i++ {
+			row := getCSVRow(val.Index(i), headers)
+			if err := csvWriter.Write(row); err != nil {
+				return fmt.Errorf("failed to write CSV row %d: %w", i, err)
+			}
+		}
+
+	case reflect.Map:
+		// Single map - write as key-value pairs
+		headers := []string{"Key", "Value"}
+		if len(opts.Headers) > 0 {
+			headers = opts.Headers
+		}
+
+		if err := csvWriter.Write(headers); err != nil {
+			return fmt.Errorf("failed to write CSV headers: %w", err)
+		}
+
+		for _, key := range val.MapKeys() {
+			row := []string{
+				fmt.Sprintf("%v", key.Interface()),
+				fmt.Sprintf("%v", val.MapIndex(key).Interface()),
+			}
+			if err := csvWriter.Write(row); err != nil {
+				return fmt.Errorf("failed to write CSV row: %w", err)
+			}
+		}
+
+	case reflect.Struct:
+		// Single struct - write field names and values
+		headers := getCSVHeaders(val)
+		if len(opts.Headers) > 0 {
+			headers = opts.Headers
+		}
+
+		if err := csvWriter.Write(headers); err != nil {
+			return fmt.Errorf("failed to write CSV headers: %w", err)
+		}
+
+		row := getCSVRow(val, headers)
+		if err := csvWriter.Write(row); err != nil {
+			return fmt.Errorf("failed to write CSV row: %w", err)
+		}
+
+	default:
+		return fmt.Errorf("ExportCSV not implemented for type %T", data)
+	}
 
 	csvWriter.Flush()
 	return csvWriter.Error()
+}
+
+// getCSVHeaders extracts headers from a struct or map
+func getCSVHeaders(val reflect.Value) []string {
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	var headers []string
+
+	switch val.Kind() {
+	case reflect.Struct:
+		typ := val.Type()
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			if field.PkgPath != "" {
+				// Skip unexported fields
+				continue
+			}
+			// Use json tag if available, otherwise use field name
+			tag := field.Tag.Get("json")
+			if tag != "" && tag != "-" {
+				// Handle json tag options like "field,omitempty"
+				if idx := strings.Index(tag, ","); idx != -1 {
+					tag = tag[:idx]
+				}
+				headers = append(headers, tag)
+			} else {
+				headers = append(headers, field.Name)
+			}
+		}
+	case reflect.Map:
+		// For maps, use the keys as headers
+		for _, key := range val.MapKeys() {
+			headers = append(headers, fmt.Sprintf("%v", key.Interface()))
+		}
+	}
+
+	return headers
+}
+
+// getCSVRow extracts values from a struct or map based on headers
+func getCSVRow(val reflect.Value, headers []string) []string {
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	row := make([]string, len(headers))
+
+	switch val.Kind() {
+	case reflect.Struct:
+		typ := val.Type()
+		for i, header := range headers {
+			// Find field by json tag or name
+			found := false
+			for j := 0; j < typ.NumField(); j++ {
+				field := typ.Field(j)
+				if field.PkgPath != "" {
+					continue
+				}
+
+				tag := field.Tag.Get("json")
+				if tag != "" && tag != "-" {
+					if idx := strings.Index(tag, ","); idx != -1 {
+						tag = tag[:idx]
+					}
+				}
+
+				if tag == header || field.Name == header {
+					fieldVal := val.Field(j)
+					row[i] = fmt.Sprintf("%v", fieldVal.Interface())
+					found = true
+					break
+				}
+			}
+			if !found {
+				row[i] = ""
+			}
+		}
+	case reflect.Map:
+		// For maps, try to find values by header keys
+		for i, header := range headers {
+			key := reflect.ValueOf(header)
+			if val.MapIndex(key).IsValid() {
+				row[i] = fmt.Sprintf("%v", val.MapIndex(key).Interface())
+			} else {
+				row[i] = ""
+			}
+		}
+	default:
+		// For other types, just convert to string
+		for i := range headers {
+			if i == 0 {
+				row[i] = fmt.Sprintf("%v", val.Interface())
+			} else {
+				row[i] = ""
+			}
+		}
+	}
+
+	return row
 }
 
 // exportZIP exports data as a ZIP archive
