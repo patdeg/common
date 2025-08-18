@@ -161,9 +161,10 @@ func TrackEventDetails(w http.ResponseWriter, r *http.Request, cookie, category,
 		}
 	}()
 
-	// Use a background context associated with the request so work can continue
-	// after the HTTP handler has returned.
-	ctx := appengine.WithContext(context.Background(), r)
+	// Use a cancellable context derived from the request context to properly
+	// handle request cancellation and avoid orphaned goroutines.
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 	reqCopy := r.Clone(ctx)
 
 	go func() {
