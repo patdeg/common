@@ -18,6 +18,7 @@ package impexp
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -390,6 +391,27 @@ func (i *DefaultImporter) ImportFile(ctx context.Context, filename string, dest 
 	return nil
 }
 
+// stripBOM removes the UTF-8 BOM if present
+func stripBOM(r io.Reader) io.Reader {
+	br := &bytes.Buffer{}
+	// Read first 3 bytes to check for BOM
+	buf := make([]byte, 3)
+	n, err := r.Read(buf)
+	if err != nil && err != io.EOF {
+		// On error, return original reader
+		return io.MultiReader(bytes.NewReader(buf[:n]), r)
+	}
+	
+	// Check for UTF-8 BOM
+	if n >= 3 && buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF {
+		// BOM found, skip it
+		return io.MultiReader(bytes.NewReader(buf[3:n]), r)
+	}
+	
+	// No BOM, return everything
+	return io.MultiReader(bytes.NewReader(buf[:n]), r)
+}
+
 // ImportBatch imports data in batches
 func (i *DefaultImporter) ImportBatch(ctx context.Context, r io.Reader, dataSink DataSink, opts *Options) error {
 	if opts == nil {
@@ -400,15 +422,18 @@ func (i *DefaultImporter) ImportBatch(ctx context.Context, r io.Reader, dataSink
 		opts.BatchSize = 100
 	}
 
+	// Strip BOM if present
+	r = stripBOM(r)
+	
 	decoder := json.NewDecoder(r)
 
 	// Read opening bracket
 	token, err := decoder.Token()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read JSON opening: %w", err)
 	}
 	if delim, ok := token.(json.Delim); !ok || delim != '[' {
-		return fmt.Errorf("expected JSON array")
+		return fmt.Errorf("expected JSON array, got %T: %v", token, token)
 	}
 
 	batch := make([]interface{}, 0, opts.BatchSize)
