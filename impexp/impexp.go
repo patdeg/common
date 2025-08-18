@@ -55,6 +55,7 @@ type Options struct {
 	Headers     []string          // CSV headers
 	MaxFileSize int64             // Maximum file size in bytes
 	Metadata    map[string]string // Additional metadata
+	Version     string            // Export version for ZIP format (default "1.0")
 }
 
 // FilterFunc filters entities during export/import
@@ -501,10 +502,16 @@ func (e *DefaultExporter) exportZIP(ctx context.Context, data interface{}, w io.
 		return err
 	}
 
+	// Use version from options, default to "1.0" if not specified
+	version := opts.Version
+	if version == "" {
+		version = "1.0"
+	}
+
 	metadata := map[string]interface{}{
 		"exported_at": time.Now().Format(time.RFC3339),
 		"format":      "zip",
-		"version":     "1.0",
+		"version":     version,
 	}
 
 	if opts.Metadata != nil {
