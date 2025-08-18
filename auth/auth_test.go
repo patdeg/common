@@ -39,6 +39,31 @@ func TestSanitizeRedirect(t *testing.T) {
 	}
 }
 
+func TestSanitizeRedirectEdgeCases(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"url-encoded path traversal", "%2e%2e/evil", "/"},
+		{"direct path traversal", "../admin", "/"},
+		{"protocol-relative URL", "//evil.com", "/"},
+		{"leading space", " /leadingSpace", "/"},
+		{"double encoded", "%252e%252e/admin", "/"},
+		{"mixed encoding", "%2e./admin", "/"},
+		{"nested path traversal", "/valid/../../../etc/passwd", "/"},
+		{"valid path", "/valid/path", "/valid/path"},
+		{"valid with query", "/valid?foo=bar", "/valid?foo=bar"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := sanitizeRedirect(c.in); got != c.want {
+				t.Errorf("sanitizeRedirect(%q) = %q; want %q", c.in, got, c.want)
+			}
+		})
+	}
+}
+
 func TestGoogleLoginHandlerUnsafeRedirect(t *testing.T) {
 	r := httptest.NewRequest("GET", "https://example.com/login?redirect=http://evil.com", nil)
 	r.Host = "example.com"

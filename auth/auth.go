@@ -70,20 +70,19 @@ func sanitizeRedirect(raw string) string {
 	if raw == "" {
 		return "/"
 	}
-	if strings.HasPrefix(raw, "//") {
-		return "/"
-	}
-	u, err := url.Parse(raw)
+	// Disallow any ".." segment after URL-decode
+	u, err := url.PathUnescape(raw)
 	if err != nil {
 		return "/"
 	}
-	if u.IsAbs() || u.Host != "" || u.Scheme != "" {
+	if strings.Contains(u, "..") {
 		return "/"
 	}
-	if !strings.HasPrefix(u.Path, "/") {
-		return "/"
+	// Must be relative and start with '/'
+	if strings.HasPrefix(u, "/") && !strings.HasPrefix(u, "//") {
+		return u
 	}
-	return u.String()
+	return "/"
 }
 
 // googleOAuthConfig returns an oauth2.Config with the RedirectURL set for the
