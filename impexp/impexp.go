@@ -173,7 +173,7 @@ func (e *DefaultExporter) ExportBatch(ctx context.Context, dataSource DataSource
 	case FormatJSON:
 		// Write opening bracket for JSON array
 		if _, err := w.Write([]byte("[\n")); err != nil {
-			return err
+			return fmt.Errorf("failed to write JSON array opening: %w", err)
 		}
 	case FormatCSV:
 		// Write CSV headers if provided
@@ -258,7 +258,7 @@ func (e *DefaultExporter) ExportBatch(ctx context.Context, dataSource DataSource
 	switch opts.Format {
 	case FormatJSON:
 		if _, err := w.Write([]byte("\n]")); err != nil {
-			return err
+			return fmt.Errorf("failed to write JSON array closing: %w", err)
 		}
 	}
 

@@ -24,6 +24,7 @@ import (
 	"crypto/cipher"
 	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"hash/crc32"
@@ -42,12 +43,19 @@ func Hash(data string) uint32 {
 	return crc32.ChecksumIEEE([]byte(data))
 }
 
-// Encrypt encrypts message using AES-GCM and returns a hex encoded nonce
-// followed by ciphertext.
+// deriveKey derives a 32-byte key from a secret string using SHA-256
+func deriveKey(secret string) []byte {
+	h := sha256.Sum256([]byte(secret))
+	return h[:]
+}
 
+// Encrypt encrypts message using AES-256-GCM and returns a hex encoded nonce
+// followed by ciphertext.
+// Note: For backward compatibility, this function returns empty string on error
+// and logs the error. New code should check for empty return value.
 func Encrypt(c context.Context, key string, message string) string {
-	myKey := "yellow submarine" + key
-	block, err := aes.NewCipher([]byte(myKey[len(myKey)-16:]))
+	derivedKey := deriveKey(key)
+	block, err := aes.NewCipher(derivedKey)
 	if err != nil {
 		Error("Error NewCipher: %v", err)
 		return ""
@@ -67,10 +75,12 @@ func Encrypt(c context.Context, key string, message string) string {
 	return hex.EncodeToString(out)
 }
 
+// Decrypt decrypts a message encrypted with Encrypt.
+// Note: For backward compatibility, this function returns empty string on error
+// and logs the error. New code should check for empty return value.
 func Decrypt(c context.Context, key string, message string) string {
-
-	myKey := "yellow submarine" + key
-	block, err := aes.NewCipher([]byte(myKey[len(myKey)-16:]))
+	derivedKey := deriveKey(key)
+	block, err := aes.NewCipher(derivedKey)
 	if err != nil {
 		Error("Error NewCipher: %v", err)
 		return ""
@@ -98,5 +108,4 @@ func Decrypt(c context.Context, key string, message string) string {
 		return ""
 	}
 	return string(plaintext)
-
 }

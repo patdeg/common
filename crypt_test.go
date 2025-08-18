@@ -47,3 +47,74 @@ func TestDecryptInvalidHex(t *testing.T) {
 		t.Fatalf("expected empty result for bad input, got %q", dec)
 	}
 }
+
+func TestEncryptKeyDerivation(t *testing.T) {
+	// Test that encryption with short key works (now uses SHA-256 derivation)
+	msg := "test message"
+	shortKey := "abc"
+	enc := Encrypt(context.Background(), shortKey, msg)
+	if enc == "" {
+		t.Fatal("encryption with short key failed")
+	}
+	
+	// Verify ciphertext length is appropriate (nonce + ciphertext + auth tag)
+	// Hex encoding doubles the length
+	if len(enc) < 32 { // At least 16 bytes (12 nonce + some ciphertext) * 2 for hex
+		t.Fatalf("ciphertext too short: %d bytes", len(enc))
+	}
+	
+	// Verify decryption with same key works
+	dec := Decrypt(context.Background(), shortKey, enc)
+	if dec != msg {
+		t.Fatalf("decryption failed: got %q, want %q", dec, msg)
+	}
+	
+	// Verify decryption with different key fails
+	wrongDec := Decrypt(context.Background(), "xyz", enc)
+	if wrongDec != "" {
+		t.Fatalf("decryption with wrong key should fail, got %q", wrongDec)
+	}
+}
+
+func TestEncryptEmptyMessage(t *testing.T) {
+	// Test that empty message can be encrypted
+	enc := Encrypt(context.Background(), "key", "")
+	if enc == "" {
+		t.Fatal("encryption of empty message failed")
+	}
+	
+	dec := Decrypt(context.Background(), "key", enc)
+	if dec != "" {
+		t.Fatalf("decryption of empty message failed: got %q", dec)
+	}
+}
+
+func TestDeriveKey(t *testing.T) {
+	// Test that deriveKey produces consistent 32-byte keys
+	key1 := deriveKey("test")
+	key2 := deriveKey("test")
+	
+	if len(key1) != 32 {
+		t.Fatalf("derived key should be 32 bytes, got %d", len(key1))
+	}
+	
+	// Same input should produce same key
+	for i := range key1 {
+		if key1[i] != key2[i] {
+			t.Fatal("deriveKey not deterministic")
+		}
+	}
+	
+	// Different input should produce different key
+	key3 := deriveKey("different")
+	same := true
+	for i := range key1 {
+		if key1[i] != key3[i] {
+			same = false
+			break
+		}
+	}
+	if same {
+		t.Fatal("different inputs produced same derived key")
+	}
+}
