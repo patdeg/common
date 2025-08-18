@@ -737,23 +737,32 @@ func Backup(ctx context.Context, sources map[string]DataSource, outputDir string
 
 	for name, source := range sources {
 		filename := filepath.Join(backupDir, fmt.Sprintf("%s.json", name))
-		file, err := os.Create(filename)
+		
+		// Use a closure to ensure proper file handling
+		err := func() error {
+			file, err := os.Create(filename)
+			if err != nil {
+				return fmt.Errorf("failed to create backup file: %v", err)
+			}
+			defer file.Close() // Ensure file is closed even on error
+
+			opts := &Options{
+				Format:    FormatJSON,
+				Pretty:    true,
+				BatchSize: 100,
+			}
+
+			if err := exporter.ExportBatch(ctx, source, file, opts); err != nil {
+				return fmt.Errorf("failed to export %s: %v", name, err)
+			}
+
+			return nil
+		}()
+
 		if err != nil {
-			return fmt.Errorf("failed to create backup file: %v", err)
+			return err
 		}
 
-		opts := &Options{
-			Format:    FormatJSON,
-			Pretty:    true,
-			BatchSize: 100,
-		}
-
-		if err := exporter.ExportBatch(ctx, source, file, opts); err != nil {
-			file.Close()
-			return fmt.Errorf("failed to export %s: %v", name, err)
-		}
-
-		file.Close()
 		common.Info("[BACKUP] Backed up %s to %s", name, filename)
 	}
 
