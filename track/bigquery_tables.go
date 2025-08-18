@@ -102,8 +102,8 @@ func createEventsTableInBigQuery(c context.Context, d string) error {
 			DatasetId: eventsDataset,
 			TableId:   d,
 		},
-		FriendlyName: "Daily Visits table",
-		Description:  "This table is created automatically to store daily visits to Deglon Consulting properties ",
+		FriendlyName: "Daily Events table",
+		Description:  "This table is created automatically to store daily events to Deglon Consulting properties ",
 		Schema: &bigquery.TableSchema{
 			Fields: []*bigquery.TableFieldSchema{
 				{Name: "Cookie", Type: "STRING", Description: "Cookie"},                 // Visitor cookie ID
