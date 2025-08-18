@@ -592,7 +592,6 @@ func (i *DefaultImporter) ImportFile(ctx context.Context, filename string, dest 
 
 // stripBOM removes the UTF-8 BOM if present
 func stripBOM(r io.Reader) io.Reader {
-	br := &bytes.Buffer{}
 	// Read first 3 bytes to check for BOM
 	buf := make([]byte, 3)
 	n, err := r.Read(buf)
