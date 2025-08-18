@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -295,7 +296,7 @@ func isTableNotFoundError(err error) bool {
 
 	// Also check error message
 	errStr := err.Error()
-	return contains(errStr, "not found") || contains(errStr, "does not exist")
+	return strings.Contains(errStr, "not found") || strings.Contains(errStr, "does not exist")
 }
 
 func isAlreadyExistsError(err error) bool {
@@ -310,11 +311,7 @@ func isAlreadyExistsError(err error) bool {
 
 	// Also check error message
 	errStr := err.Error()
-	return contains(errStr, "already exists")
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && (s[0:len(substr)] == substr || contains(s[1:], substr)))
+	return strings.Contains(errStr, "already exists")
 }
 
 // SchemaFromStruct generates a BigQuery schema from a struct
