@@ -168,11 +168,17 @@ var messagelTemplate = template.
 // displays a message and performs a client-side redirect to redirectUrl after
 // timeoutSec seconds via a meta-refresh tag.
 func MessageHandler(c context.Context, w http.ResponseWriter, message string, redirectUrl string, timeoutSec int64) {
-	if err := messagelTemplate.Execute(w, template.FuncMap{
-		"Message":  message,
-		"Redirect": redirectUrl,
-		"Timeout":  timeoutSec,
-	}); err != nil {
+	// Use a struct for template data instead of FuncMap to ensure proper HTML escaping
+	data := struct {
+		Message  string
+		Redirect string
+		Timeout  int64
+	}{
+		Message:  message,
+		Redirect: redirectUrl,
+		Timeout:  timeoutSec,
+	}
+	if err := messagelTemplate.Execute(w, data); err != nil {
 		Error("Error with messagelTemplate: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
