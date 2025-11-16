@@ -28,6 +28,11 @@ import (
 	"time"
 )
 
+// AnalysisCallback is called when LLM analysis completes successfully.
+// It receives the analysis result text and can perform custom actions like
+// storing it in a database or sending notifications.
+type AnalysisCallback func(analysis string) error
+
 // LoggingLLM captures standard log output alongside a markdown summary for a
 // single logical operation. The summary is later available for printing or as
 // additional context for LLM debugging.
@@ -37,10 +42,11 @@ type LoggingLLM struct {
 
 	startTime time.Time
 
-	mu            sync.Mutex
-	summary       strings.Builder
-	analysisOnce  sync.Once
-	lastErrorText string
+	mu               sync.Mutex
+	summary          strings.Builder
+	analysisOnce     sync.Once
+	lastErrorText    string
+	analysisCallback AnalysisCallback
 }
 
 var (
@@ -51,10 +57,18 @@ var (
 // names. The optional format string is logged immediately as an Info entry to
 // seed the markdown summary.
 func CreateLoggingLLM(fileName, funcName, format string, v ...interface{}) *LoggingLLM {
+	return CreateLoggingLLMWithCallback(fileName, funcName, nil, format, v...)
+}
+
+// CreateLoggingLLMWithCallback constructs a LoggingLLM with a custom callback
+// that will be invoked when LLM analysis completes successfully.
+// The callback receives the analysis text and can store it, send notifications, etc.
+func CreateLoggingLLMWithCallback(fileName, funcName string, callback AnalysisCallback, format string, v ...interface{}) *LoggingLLM {
 	logger := &LoggingLLM{
-		fileName:  fileName,
-		funcName:  funcName,
-		startTime: time.Now(),
+		fileName:         fileName,
+		funcName:         funcName,
+		startTime:        time.Now(),
+		analysisCallback: callback,
 	}
 
 	logger.mu.Lock()
@@ -115,8 +129,26 @@ func (l *LoggingLLM) WarnSafe(format string, v ...interface{}) {
 	l.appendEntry("WARN", SanitizeMessage(fmt.Sprintf(format, v...)))
 }
 
+// ErrorNoAnalysis logs an error message and records it in the markdown summary
+// WITHOUT triggering LLM analysis. Use this for errors that don't need AI debugging
+// or when you want manual control over when analysis happens.
+func (l *LoggingLLM) ErrorNoAnalysis(format string, v ...interface{}) {
+	Error(format, v...)
+	msg := fmt.Sprintf(format, v...)
+	l.appendEntry("ERROR", msg)
+}
+
+// ErrorNoAnalysisSafe logs an error with PII protection and records the sanitized
+// message in the summary WITHOUT triggering LLM analysis.
+func (l *LoggingLLM) ErrorNoAnalysisSafe(format string, v ...interface{}) {
+	ErrorSafe(format, v...)
+	msg := SanitizeMessage(fmt.Sprintf(format, v...))
+	l.appendEntry("ERROR", msg)
+}
+
 // Error logs an error message, records it in the markdown summary and
 // triggers an asynchronous LLM analysis for additional guidance.
+// If a callback was provided during creation, it will be called with the analysis result.
 func (l *LoggingLLM) Error(format string, v ...interface{}) {
 	Error(format, v...)
 	msg := fmt.Sprintf(format, v...)
@@ -126,6 +158,7 @@ func (l *LoggingLLM) Error(format string, v ...interface{}) {
 
 // ErrorSafe logs an error with PII protection, records the sanitized message
 // in the summary, and triggers the LLM analysis workflow.
+// If a callback was provided during creation, it will be called with the analysis result.
 func (l *LoggingLLM) ErrorSafe(format string, v ...interface{}) {
 	ErrorSafe(format, v...)
 	msg := SanitizeMessage(fmt.Sprintf(format, v...))
@@ -195,6 +228,13 @@ func (l *LoggingLLM) runLLMAnalysis() {
 	}
 
 	l.appendEntry("LLM", response)
+
+	// Invoke callback if provided
+	if l.analysisCallback != nil {
+		if err := l.analysisCallback(response); err != nil {
+			l.Warn("Analysis callback failed for %s.%s: %v", l.fileName, l.funcName, err)
+		}
+	}
 }
 
 // buildLLMPrompt assembles the system prompt, current summary, and source code
