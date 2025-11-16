@@ -48,4 +48,28 @@ var (
 	//
 	//     go build -ldflags "-X github.com/patdeg/common.VERSION=1.0.0"
 	VERSION string
+
+	// LLMAPIKey stores the API key used to contact the default LLM provider.
+	// Users should set the COMMON_LLM_API_KEY environment variable prior to
+	// running their binaries.
+	LLMAPIKey = os.Getenv("COMMON_LLM_API_KEY")
+
+	// LLMModel defines the default LLM model identifier. The value may be
+	// overridden via the COMMON_LLM_MODEL environment variable.
+	LLMModel = func() string {
+		if v := os.Getenv("COMMON_LLM_MODEL"); v != "" {
+			return v
+		}
+		return "meta-llama/llama-4-scout-17b-16e-instruct"
+	}()
+
+	// LLMBaseURL defines the HTTP endpoint for the LLM provider. It defaults to
+	// Groq's OpenAI-compatible API but can be overridden with
+	// COMMON_LLM_BASE_URL.
+	LLMBaseURL = func() string {
+		if v := os.Getenv("COMMON_LLM_BASE_URL"); v != "" {
+			return v
+		}
+		return "https://api.groq.com/openai/v1"
+	}()
 )
