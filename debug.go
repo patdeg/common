@@ -111,3 +111,41 @@ func DebugInfo(r *http.Request) {
 	// DebugInfo is disabled in non-App Engine environments
 
 }
+
+// HandleEcho is an undocumented debug endpoint that echoes the first 255 characters
+// of the request body to the logs and returns a simple response.
+// This is useful for debugging request payloads without storing sensitive data.
+//
+// Request:
+//   - Method: POST
+//   - Body: Any content (application/json, text/plain, etc.)
+//
+// Response (200 OK):
+//
+//	{
+//	  "status": "ok"
+//	}
+func HandleEcho(w http.ResponseWriter, r *http.Request) {
+	// Only allow POST requests
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Read the request body (limit to 255 characters)
+	body, err := io.ReadAll(io.LimitReader(r.Body, 255))
+	if err != nil {
+		Error("Failed to read request body: %v", err)
+		http.Error(w, `{"status":"error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer r.Body.Close()
+
+	// Log the first 255 characters
+	Info("CHECKPOINT - %s", string(body))
+
+	// Return simple response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"ok"}`))
+}
