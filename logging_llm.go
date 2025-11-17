@@ -86,20 +86,14 @@ func CreateLoggingLLMWithCallback(fileName, funcName string, callback AnalysisCa
 // Debug logs a debug message and records it inside the markdown summary when
 // ISDEBUG is enabled. The summary stores a PII-sanitized representation.
 func (l *LoggingLLM) Debug(format string, v ...interface{}) {
-	Debug(format, v...)
-	if !ISDEBUG {
-		return
-	}
+	//Debug(format, v...)
 	l.appendEntry("DEBUG", SanitizeMessage(fmt.Sprintf(format, v...)))
 }
 
 // DebugSafe logs a sanitized debug message and records it in the markdown
 // summary when ISDEBUG is enabled.
 func (l *LoggingLLM) DebugSafe(format string, v ...interface{}) {
-	DebugSafe(format, v...)
-	if !ISDEBUG {
-		return
-	}
+	//DebugSafe(format, v...)
 	l.appendEntry("DEBUG", SanitizeMessage(fmt.Sprintf(format, v...)))
 }
 
@@ -118,49 +112,43 @@ func (l *LoggingLLM) InfoSafe(format string, v ...interface{}) {
 
 // Warn logs a warning message and records it in the markdown summary.
 func (l *LoggingLLM) Warn(format string, v ...interface{}) {
-	Debug("-----------------------------------------------------------------")
 	Warn(format, v...)
-	Debug("-----------------------------------------------------------------")
 	l.appendEntry("WARN", fmt.Sprintf(format, v...))
+	l.Print()
 }
 
 // WarnSafe logs a warning message with sanitization applied and records the
 // sanitized version in the markdown summary.
 func (l *LoggingLLM) WarnSafe(format string, v ...interface{}) {
-	Debug("-----------------------------------------------------------------")
 	WarnSafe(format, v...)
-	Debug("-----------------------------------------------------------------")
 	l.appendEntry("WARN", SanitizeMessage(fmt.Sprintf(format, v...)))
+	l.Print()
 }
 
 // ErrorNoAnalysis logs an error message and records it in the markdown summary
 // WITHOUT triggering LLM analysis. Use this for errors that don't need AI debugging
 // or when you want manual control over when analysis happens.
 func (l *LoggingLLM) ErrorNoAnalysis(format string, v ...interface{}) {
-	Debug("=================================================================")
 	Error(format, v...)
-	Debug("=================================================================")
 	msg := fmt.Sprintf(format, v...)
 	l.appendEntry("ERROR", msg)
+	l.Print()
 }
 
 // ErrorNoAnalysisSafe logs an error with PII protection and records the sanitized
 // message in the summary WITHOUT triggering LLM analysis.
 func (l *LoggingLLM) ErrorNoAnalysisSafe(format string, v ...interface{}) {
-	Debug("=================================================================")
 	ErrorSafe(format, v...)
-	Debug("=================================================================")
 	msg := SanitizeMessage(fmt.Sprintf(format, v...))
 	l.appendEntry("ERROR", msg)
+	l.Print()
 }
 
 // Error logs an error message, records it in the markdown summary and
 // triggers an asynchronous LLM analysis for additional guidance.
 // If a callback was provided during creation, it will be called with the analysis result.
 func (l *LoggingLLM) Error(format string, v ...interface{}) {
-	Debug("=================================================================")
 	Error(format, v...)
-	Debug("=================================================================")
 	msg := fmt.Sprintf(format, v...)
 	l.appendEntry("ERROR", msg)
 	l.triggerLLMAnalysis(msg)
@@ -170,9 +158,7 @@ func (l *LoggingLLM) Error(format string, v ...interface{}) {
 // in the summary, and triggers the LLM analysis workflow.
 // If a callback was provided during creation, it will be called with the analysis result.
 func (l *LoggingLLM) ErrorSafe(format string, v ...interface{}) {
-	Debug("=================================================================")
 	ErrorSafe(format, v...)
-	Debug("=================================================================")
 	msg := SanitizeMessage(fmt.Sprintf(format, v...))
 	l.appendEntry("ERROR", msg)
 	l.triggerLLMAnalysis(msg)
@@ -238,14 +224,12 @@ func (l *LoggingLLM) runLLMAnalysis() {
 	response, err := executeLLMRequest(ctx, prompt)
 	if err != nil {
 		l.Warn("LLM analysis failed for %s.%s: %v", l.fileName, l.funcName, err)
+	        l.Print()
 		return
 	}
 
 	l.appendEntry("LLM", response)
-
-	Debug("=================================================================")
-	ErrorSafe("ERROR Analysis: %v", response)
-	Debug("=================================================================")
+	l.Print()
 
 	// Invoke callback if provided
 	if l.analysisCallback != nil {
