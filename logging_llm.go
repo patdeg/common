@@ -118,14 +118,18 @@ func (l *LoggingLLM) InfoSafe(format string, v ...interface{}) {
 
 // Warn logs a warning message and records it in the markdown summary.
 func (l *LoggingLLM) Warn(format string, v ...interface{}) {
+	Debug("-----------------------------------------------------------------")
 	Warn(format, v...)
+	Debug("-----------------------------------------------------------------")
 	l.appendEntry("WARN", fmt.Sprintf(format, v...))
 }
 
 // WarnSafe logs a warning message with sanitization applied and records the
 // sanitized version in the markdown summary.
 func (l *LoggingLLM) WarnSafe(format string, v ...interface{}) {
+	Debug("-----------------------------------------------------------------")
 	WarnSafe(format, v...)
+	Debug("-----------------------------------------------------------------")
 	l.appendEntry("WARN", SanitizeMessage(fmt.Sprintf(format, v...)))
 }
 
@@ -133,7 +137,9 @@ func (l *LoggingLLM) WarnSafe(format string, v ...interface{}) {
 // WITHOUT triggering LLM analysis. Use this for errors that don't need AI debugging
 // or when you want manual control over when analysis happens.
 func (l *LoggingLLM) ErrorNoAnalysis(format string, v ...interface{}) {
+	Debug("=================================================================")
 	Error(format, v...)
+	Debug("=================================================================")
 	msg := fmt.Sprintf(format, v...)
 	l.appendEntry("ERROR", msg)
 }
@@ -141,7 +147,9 @@ func (l *LoggingLLM) ErrorNoAnalysis(format string, v ...interface{}) {
 // ErrorNoAnalysisSafe logs an error with PII protection and records the sanitized
 // message in the summary WITHOUT triggering LLM analysis.
 func (l *LoggingLLM) ErrorNoAnalysisSafe(format string, v ...interface{}) {
+	Debug("=================================================================")
 	ErrorSafe(format, v...)
+	Debug("=================================================================")
 	msg := SanitizeMessage(fmt.Sprintf(format, v...))
 	l.appendEntry("ERROR", msg)
 }
@@ -150,7 +158,9 @@ func (l *LoggingLLM) ErrorNoAnalysisSafe(format string, v ...interface{}) {
 // triggers an asynchronous LLM analysis for additional guidance.
 // If a callback was provided during creation, it will be called with the analysis result.
 func (l *LoggingLLM) Error(format string, v ...interface{}) {
+	Debug("=================================================================")
 	Error(format, v...)
+	Debug("=================================================================")
 	msg := fmt.Sprintf(format, v...)
 	l.appendEntry("ERROR", msg)
 	l.triggerLLMAnalysis(msg)
@@ -160,7 +170,9 @@ func (l *LoggingLLM) Error(format string, v ...interface{}) {
 // in the summary, and triggers the LLM analysis workflow.
 // If a callback was provided during creation, it will be called with the analysis result.
 func (l *LoggingLLM) ErrorSafe(format string, v ...interface{}) {
+	Debug("=================================================================")
 	ErrorSafe(format, v...)
+	Debug("=================================================================")
 	msg := SanitizeMessage(fmt.Sprintf(format, v...))
 	l.appendEntry("ERROR", msg)
 	l.triggerLLMAnalysis(msg)
@@ -168,7 +180,9 @@ func (l *LoggingLLM) ErrorSafe(format string, v ...interface{}) {
 
 // Print writes the current markdown summary to stdout.
 func (l *LoggingLLM) Print() {
+	Debug("=================================================================")
 	fmt.Println(l.MarkdownSummary())
+	Debug("=================================================================")
 }
 
 // MarkdownSummary returns the accumulated markdown summary including the
@@ -228,6 +242,10 @@ func (l *LoggingLLM) runLLMAnalysis() {
 	}
 
 	l.appendEntry("LLM", response)
+
+	Debug("=================================================================")
+	ErrorSafe("ERROR Analysis: %v", response)
+	Debug("=================================================================")
 
 	// Invoke callback if provided
 	if l.analysisCallback != nil {

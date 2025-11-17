@@ -50,11 +50,26 @@ The summary prints a concise markdown log of the run. If `log.Error*` is invoked
 
 ## API Reference
 
-### Constructor
+### Constructors
 
 | Signature | Description |
 | --- | --- |
 | `func CreateLoggingLLM(fileName, funcName, format string, v ...interface{}) *LoggingLLM` | Creates a new structured logger. The initial `format` message seeds the summary with an Info entry (optional). |
+| `func CreateLoggingLLMWithCallback(fileName, funcName string, callback AnalysisCallback, format string, v ...interface{}) *LoggingLLM` | Creates a logger with a custom callback that will be invoked when LLM analysis completes. |
+
+### Callback Type
+
+```go
+type AnalysisCallback func(analysis string) error
+```
+
+Callbacks receive the LLM analysis text and can perform custom actions like:
+- Store analysis in a database
+- Create bug reports (GitHub Issues, Jira, etc.)
+- Send notifications (Slack, email)
+- Trigger alerts or workflows
+
+Callbacks run asynchronously after LLM analysis completes. Errors in callbacks are logged but don't interrupt the main flow.
 
 ### Core Methods
 
