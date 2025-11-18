@@ -7,6 +7,7 @@ A comprehensive Go library providing reusable components for building scalable a
 
 ## 🚀 Features
 
+- **🧾 Logging**: Structured, PII-safe logging with optional LLM-assisted error analysis
 - **🔐 Authentication**: OAuth2, JWT, session management
 - **💾 Data Storage**: Datastore, BigQuery, caching abstractions
 - **💰 Payments**: Subscription management with multiple providers
@@ -36,6 +37,34 @@ common.InfoSafe("User logged in: %s", userEmail)
 num, err := common.StringToInt("123")
 ```
 
+### LLM-Assisted Logging
+```go
+log := common.CreateLoggingLLM("handler.go", "HandleRequest", "processing %s", r.URL.Path)
+defer log.Print() // emit markdown summary at the end
+
+log.InfoSafe("starting handler for user %s", userEmail)
+
+if err := doWork(); err != nil {
+    // Triggers asynchronous LLM analysis when COMMON_LLM_API_KEY is set
+    log.ErrorSafe("failed to process request: %v", err)
+    return
+}
+
+// Optional: plug in a callback for self-healing behavior (alerts, tickets, etc.)
+log := common.CreateLoggingLLMWithCallback(
+    "handler.go",
+    "HandleRequest",
+    func(analysis string) error {
+        // e.g. send an email, create an issue, or store analysis in a DB
+        return nil
+    },
+    "processing %s", r.URL.Path,
+)
+defer log.Print()
+```
+
+LLM analysis runs asynchronously in a background goroutine and never blocks the HTTP response path.
+
 ### Data Storage
 ```go
 import "github.com/patdeg/common/datastore"
@@ -56,6 +85,8 @@ err = service.Send(ctx, message)
 
 - [**Package Structure**](docs/PACKAGE_STRUCTURE.md) - Organization and architecture
 - [**API Reference**](docs/API_REFERENCE.md) - Complete API documentation
+- [**Logging Guide**](docs/LOGGING_GUIDE.md) - PII-safe logging helpers and patterns
+- [**LLM Logging Reference**](docs/LOGGING_LLM.md) - `LoggingLLM` and automated error analysis
 - [**Security Audit**](docs/SECURITY_AUDIT.md) - Security verification for public repo
 - [**Examples**](examples/) - Working examples and tutorials
 
@@ -100,6 +131,11 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 # Email
 SENDGRID_API_KEY=your-key
 FROM_EMAIL=noreply@example.com
+
+# Optional: LLM-assisted error analysis
+COMMON_LLM_API_KEY=your-llm-api-key
+COMMON_LLM_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+COMMON_LLM_BASE_URL=https://api.groq.com/openai/v1
 ```
 
 ## 📈 Architecture
@@ -135,5 +171,3 @@ FROM_EMAIL=noreply@example.com
 ## 📝 License
 
 Apache License 2.0 - see [LICENSE](LICENSE) file for details.
-
-
