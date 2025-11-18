@@ -58,7 +58,7 @@ Thumbs.db
 # GoLand
 .idea/
 plans/
-docs/
+internal-docs/
 
 # Visual Studio Code
 .vscode/

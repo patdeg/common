@@ -87,7 +87,6 @@ err = service.Send(ctx, message)
 - [**API Reference**](docs/API_REFERENCE.md) - Complete API documentation
 - [**Logging Guide**](docs/LOGGING_GUIDE.md) - PII-safe logging helpers and patterns
 - [**LLM Logging Reference**](docs/LOGGING_LLM.md) - `LoggingLLM` and automated error analysis
-- [**Security Audit**](docs/SECURITY_AUDIT.md) - Security verification for public repo
 - [**Examples**](examples/) - Working examples and tutorials
 
 ## 🔒 Security Notice

@@ -45,4 +45,3 @@ func main() {
 ## See Also
 
 - [Logging Guide](../docs/LOGGING_GUIDE.md) - Comprehensive usage guide
-- [Migration Guide](../docs/LOGGING_MIGRATION.md) - Migration from standard logging
