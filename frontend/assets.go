@@ -18,7 +18,7 @@ package frontend
 
 import (
 	"bytes"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -30,6 +30,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/patdeg/common"
 )
 
 // AssetManager manages static assets with versioning and caching
@@ -77,14 +79,16 @@ func (am *AssetManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, am.urlPrefix)
 	path = strings.TrimPrefix(path, "/")
 
-	// Security check
-	if strings.Contains(path, "..") {
+	// Secure path validation to prevent directory traversal attacks
+	validPath, err := common.ValidatePath(am.basePath, path)
+	if err != nil {
+		common.Error("Path traversal attempt blocked: %s (requested: %s)", err, path)
 		http.Error(w, "Invalid path", http.StatusBadRequest)
 		return
 	}
 
-	// Get or load asset
-	asset, err := am.getAsset(path)
+	// Get or load asset using validated path
+	asset, err := am.getAssetFromPath(validPath)
 	if err != nil {
 		http.Error(w, "Asset not found", http.StatusNotFound)
 		return
@@ -109,42 +113,51 @@ func (am *AssetManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Serve content
-	w.Write(asset.Content)
+	if _, err := w.Write(asset.Content); err != nil {
+		common.Error("Failed to write asset response: %v", err)
+	}
 }
 
-// getAsset loads or retrieves an asset from cache
-func (am *AssetManager) getAsset(path string) (*Asset, error) {
+// getAssetFromPath loads an asset from a validated full path.
+// The fullPath argument must have been produced by common.ValidatePath to
+// prevent directory traversal.
+func (am *AssetManager) getAssetFromPath(fullPath string) (*Asset, error) {
+	// Extract relative path for caching
+	relPath, err := filepath.Rel(am.basePath, fullPath)
+	if err != nil {
+		return nil, err
+	}
+
 	// Check cache in production
 	if !am.development {
 		am.mu.RLock()
-		if asset, ok := am.cache[path]; ok {
+		if asset, ok := am.cache[relPath]; ok {
 			am.mu.RUnlock()
 			return asset, nil
 		}
 		am.mu.RUnlock()
 	}
 
-	// Load from filesystem
-	fullPath := filepath.Join(am.basePath, path)
-
+	// Load from filesystem using validated path
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		return nil, err
 	}
 
+	// #nosec G304 -- fullPath must be validated via common.ValidatePath before calling.
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Calculate hash
-	hash := fmt.Sprintf("%x", md5.Sum(content))
+	// Calculate hash using SHA-256 (more secure than MD5)
+	hash := fmt.Sprintf("%x", sha256.Sum256(content))
 
 	// Determine content type
-	contentType := getContentType(path)
+	contentType := getContentType(relPath)
 
 	asset := &Asset{
-		Path:        path,
+		Path:        relPath,
 		Content:     content,
 		ContentType: contentType,
 		Hash:        hash[:8], // Use first 8 chars of hash
@@ -154,8 +167,8 @@ func (am *AssetManager) getAsset(path string) (*Asset, error) {
 	// Cache in production
 	if !am.development {
 		am.mu.Lock()
-		am.cache[path] = asset
-		am.hashCache[path] = asset.Hash
+		am.cache[relPath] = asset
+		am.hashCache[relPath] = asset.Hash
 		am.mu.Unlock()
 	}
 
@@ -176,8 +189,14 @@ func (am *AssetManager) getAssetHash(path string) string {
 	}
 	am.mu.RUnlock()
 
-	// Try to load asset to get hash
-	if asset, err := am.getAsset(path); err == nil {
+	// Try to load asset to get hash using validated path
+	validPath, err := common.ValidatePath(am.basePath, path)
+	if err != nil {
+		common.Error("Path traversal attempt blocked when computing hash: %s (requested: %s)", err, path)
+		return ""
+	}
+
+	if asset, err := am.getAssetFromPath(validPath); err == nil {
 		return asset.Hash
 	}
 

@@ -37,7 +37,9 @@ func DumpRequest(r *http.Request, withBody bool) {
 	}
 	Debug("Request: %v", B2S(request))
 	if withBody && r.Body != nil {
-		r.Body.Close()
+		if err := r.Body.Close(); err != nil {
+			Error("Error closing request body after dump: %v", err)
+		}
 	}
 }
 
@@ -65,7 +67,10 @@ func DumpResponse(c context.Context, r *http.Response) {
 		Error("Error dumping response: %v", err)
 		return
 	}
-	r.Body.Close()
+	if err := r.Body.Close(); err != nil {
+		Error("Error closing response body after dump: %v", err)
+		return
+	}
 
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	respDump, err := httputil.DumpResponse(r, true)
@@ -147,5 +152,7 @@ func HandleEcho(w http.ResponseWriter, r *http.Request) {
 	// Return simple response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`))
+	if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+		Error("Failed to write HandleEcho response: %v", err)
+	}
 }

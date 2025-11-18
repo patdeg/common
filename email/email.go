@@ -207,7 +207,9 @@ func (s *SendGridService) Send(ctx context.Context, message *Message) error {
 
 	if resp.StatusCode >= 400 {
 		var errResp map[string]interface{}
-		json.NewDecoder(resp.Body).Decode(&errResp)
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			return fmt.Errorf("SendGrid error (status %d): failed to decode error response: %v", resp.StatusCode, err)
+		}
 		return fmt.Errorf("SendGrid error (status %d): %v", resp.StatusCode, errResp)
 	}
 
@@ -375,8 +377,11 @@ func (s *LocalService) Send(ctx context.Context, message *Message) error {
 	if s.config.IsDev && message.HTML != "" {
 		// In dev mode, save HTML to file for inspection
 		filename := fmt.Sprintf("/tmp/email_%d.html", time.Now().Unix())
-		os.WriteFile(filename, []byte(message.HTML), 0644)
-		common.Info("  HTML saved to: %s", filename)
+		if err := os.WriteFile(filename, []byte(message.HTML), 0600); err != nil {
+			common.Error("Failed to save local email HTML to %s: %v", filename, err)
+		} else {
+			common.Info("  HTML saved to: %s", filename)
+		}
 	}
 
 	return nil
@@ -475,6 +480,7 @@ func formatAddresses(addresses []Address) string {
 
 // AttachmentFromFile creates an attachment from a file
 func AttachmentFromFile(filename string, contentType string) (*Attachment, error) {
+	// #nosec G304 -- filename should be validated or restricted to safe directories by the caller.
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err

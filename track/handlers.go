@@ -141,7 +141,9 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 
 	// onePixelPNG is a 1x1 transparent PNG defined in base.go. Writing it
 	// triggers the image load that records the tracking event.
-	w.Write([]byte(onePixelPNG))
+	if _, err := w.Write([]byte(onePixelPNG)); err != nil {
+		common.Error("Failed to write tracking pixel: %v", err)
+	}
 }
 
 func ClickHandler(w http.ResponseWriter, r *http.Request) {
@@ -151,10 +153,12 @@ func ClickHandler(w http.ResponseWriter, r *http.Request) {
 	TrackEvent(w, r, common.GetCookieID(w, r))
 	url := r.FormValue("url")
 	// Validate the destination to avoid redirecting to arbitrary schemes.
-	// Fallback to the site homepage when the URL is empty or invalid.
+	// Fallback to the site root when the URL is empty or invalid.
 	if !common.IsValidHTTPURL(url) {
 		common.Error("Invalid redirect URL: %v", url)
-		url = "http://www.mygotome.com"
+		// Redirect to root instead of hardcoded external domain
+		// This prevents information disclosure about business relationships
+		url = "/"
 	}
 	common.Info("Redirect to %v", url)
 	http.Redirect(w, r, url, http.StatusFound)

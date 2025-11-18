@@ -129,11 +129,11 @@ PROJECT_ID=your-project-id
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
 # Email
-SENDGRID_API_KEY=your-key
+SENDGRID_API_KEY=SG.example_fake_key.replace_with_real_key
 FROM_EMAIL=noreply@example.com
 
 # Optional: LLM-assisted error analysis
-COMMON_LLM_API_KEY=your-llm-api-key
+COMMON_LLM_API_KEY=gsk_example_fake_key_replace_with_real
 COMMON_LLM_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
 COMMON_LLM_BASE_URL=https://api.groq.com/openai/v1
 ```

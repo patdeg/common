@@ -246,7 +246,8 @@ func GetEvent(r *http.Request) GAEvent {
 		}
 	}
 	if guid == "" {
-		guid = common.Encrypt(r.Context(), "", common.MD5(r.RemoteAddr+r.Header.Get("User-Agent")))
+		// Use SecureHash (SHA-256) instead of MD5 for visitor identification
+		guid = common.Encrypt(r.Context(), "", common.SecureHash(r.RemoteAddr+r.Header.Get("User-Agent")))
 	}
 
 	query := ""

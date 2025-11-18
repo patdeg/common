@@ -119,7 +119,7 @@ func Warn(format string, v ...interface{}) {
 // If ERROR_DATASTORE_ENTITY is set, also stores the error in Datastore.
 func Error(format string, v ...interface{}) {
 	errorMsg := fmt.Sprintf(format, v...)
-	log.Printf("ERROR: "+errorMsg+"\n")
+	log.Printf("ERROR: " + errorMsg + "\n")
 
 	// Store in Datastore if configured
 	if ERROR_DATASTORE_ENTITY != "" && errorClient != nil {
@@ -150,28 +150,30 @@ func Error(format string, v ...interface{}) {
 // The function logs the message and then calls os.Exit(1).
 func Fatal(format string, v ...interface{}) {
 	errorMsg := fmt.Sprintf(format, v...)
-	log.Printf("FATAL: "+errorMsg+"\n")
-	
+	log.Printf("FATAL: " + errorMsg + "\n")
+
 	// Store in Datastore if configured (best effort, don't wait)
 	if ERROR_DATASTORE_ENTITY != "" && errorClient != nil {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			
+
 			// Create error entity with metadata
 			errorEntry := getAppEngineMetadata()
 			errorEntry.Timestamp = time.Now()
 			errorEntry.Message = "FATAL: " + errorMsg
-			
+
 			// Use timestamp as key for uniqueness
 			keyName := fmt.Sprintf("%d", time.Now().UnixNano())
 			key := datastore.NameKey(ERROR_DATASTORE_ENTITY, keyName, nil)
-			
+
 			// Store in Datastore (fire and forget)
-			errorClient.Put(ctx, key, &errorEntry)
+			if _, err := errorClient.Put(ctx, key, &errorEntry); err != nil {
+				log.Printf("WARNING: Failed to store error in Datastore: %v\n", err)
+			}
 		}()
 	}
-	
+
 	// Give a brief moment for the log to be written
 	time.Sleep(100 * time.Millisecond)
 	os.Exit(1)

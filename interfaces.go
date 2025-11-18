@@ -35,7 +35,8 @@ import (
 //	defer r.Body.Close()
 func GetBody(r *http.Request) []byte {
 	buffer := new(bytes.Buffer)
-	buffer.ReadFrom(r.Body)
+	// #nosec G104 -- callers expect best-effort body capture; read errors are treated as truncated bodies.
+	_, _ = buffer.ReadFrom(r.Body)
 	return buffer.Bytes()
 }
 
@@ -46,7 +47,8 @@ func GetBody(r *http.Request) []byte {
 //	defer resp.Body.Close()
 func GetBodyResponse(r *http.Response) []byte {
 	buffer := new(bytes.Buffer)
-	buffer.ReadFrom(r.Body)
+	// #nosec G104 -- callers expect best-effort body capture; read errors are treated as truncated bodies.
+	_, _ = buffer.ReadFrom(r.Body)
 	return buffer.Bytes()
 }
 

@@ -141,11 +141,12 @@ func (e *DefaultExporter) Export(ctx context.Context, data interface{}, w io.Wri
 func (e *DefaultExporter) ExportFile(ctx context.Context, data interface{}, filename string, opts *Options) error {
 	// Create directory if needed
 	dir := filepath.Dir(filename)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create directory: %v", err)
 	}
 
 	// Create file
+	// #nosec G304 -- filename is expected to be application-controlled, not raw user input.
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %v", err)
@@ -248,7 +249,7 @@ func (e *DefaultExporter) ExportBatch(ctx context.Context, dataSource DataSource
 				if opts.Delimiter != 0 {
 					csvWriter.Comma = opts.Delimiter
 				}
-				
+
 				// Get headers from item if not already done
 				if len(opts.Headers) == 0 {
 					itemVal := reflect.ValueOf(item)
@@ -260,7 +261,7 @@ func (e *DefaultExporter) ExportBatch(ctx context.Context, dataSource DataSource
 						}
 					}
 				}
-				
+
 				// Write row
 				itemVal := reflect.ValueOf(item)
 				row := getCSVRow(itemVal, opts.Headers)
@@ -558,6 +559,7 @@ func (i *DefaultImporter) Import(ctx context.Context, r io.Reader, dest interfac
 
 // ImportFile imports data from a file
 func (i *DefaultImporter) ImportFile(ctx context.Context, filename string, dest interface{}, opts *Options) error {
+	// #nosec G304 -- filename is expected to be application-controlled. Validate if sourced from user input.
 	file, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %v", err)
@@ -599,13 +601,13 @@ func stripBOM(r io.Reader) io.Reader {
 		// On error, return original reader
 		return io.MultiReader(bytes.NewReader(buf[:n]), r)
 	}
-	
+
 	// Check for UTF-8 BOM
 	if n >= 3 && buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF {
 		// BOM found, skip it
 		return io.MultiReader(bytes.NewReader(buf[3:n]), r)
 	}
-	
+
 	// No BOM, return everything
 	return io.MultiReader(bytes.NewReader(buf[:n]), r)
 }
@@ -622,7 +624,7 @@ func (i *DefaultImporter) ImportBatch(ctx context.Context, r io.Reader, dataSink
 
 	// Strip BOM if present
 	r = stripBOM(r)
-	
+
 	decoder := json.NewDecoder(r)
 
 	// Read opening bracket
@@ -728,7 +730,7 @@ func Backup(ctx context.Context, sources map[string]DataSource, outputDir string
 	timestamp := time.Now().Format("20060102-150405")
 	backupDir := filepath.Join(outputDir, fmt.Sprintf("backup-%s", timestamp))
 
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
+	if err := os.MkdirAll(backupDir, 0750); err != nil {
 		return fmt.Errorf("failed to create backup directory: %v", err)
 	}
 
@@ -736,8 +738,9 @@ func Backup(ctx context.Context, sources map[string]DataSource, outputDir string
 
 	for name, source := range sources {
 		filename := filepath.Join(backupDir, fmt.Sprintf("%s.json", name))
-		
+
 		// Use a closure to ensure proper file handling
+		// #nosec G304 -- filename is derived from application-controlled backupDir and map keys.
 		err := func() error {
 			file, err := os.Create(filename)
 			if err != nil {
@@ -776,6 +779,7 @@ func Restore(ctx context.Context, backupDir string, sinks map[string]DataSink) e
 	for name, sink := range sinks {
 		filename := filepath.Join(backupDir, fmt.Sprintf("%s.json", name))
 
+		// #nosec G304 -- backupDir and sink keys are application-controlled, not raw user input.
 		file, err := os.Open(filename)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -785,17 +789,22 @@ func Restore(ctx context.Context, backupDir string, sinks map[string]DataSink) e
 			return fmt.Errorf("failed to open backup file: %v", err)
 		}
 
+		// Ensure the file is always closed and handle close errors separately.
+		defer func(f *os.File, name string) {
+			if cerr := f.Close(); cerr != nil {
+				common.Error("[RESTORE] Failed to close backup file %s: %v", name, cerr)
+			}
+		}(file, filename)
+
 		opts := &Options{
 			Format:    FormatJSON,
 			BatchSize: 100,
 		}
 
 		if err := importer.ImportBatch(ctx, file, sink, opts); err != nil {
-			file.Close()
 			return fmt.Errorf("failed to import %s: %v", name, err)
 		}
 
-		file.Close()
 		common.Info("[RESTORE] Restored %s from %s", name, filename)
 	}
 

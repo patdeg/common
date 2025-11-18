@@ -244,7 +244,9 @@ func (m *Monitor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(report)
+	if err := json.NewEncoder(w).Encode(report); err != nil {
+		common.Error("[MONITOR] Failed to encode health report: %v", err)
+	}
 }
 
 // HealthReport represents the overall health report

@@ -21,9 +21,12 @@ package common
 // template renders a simple page that redirects after a given timeout.
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"html/template"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/mssola/user_agent"
@@ -164,6 +167,30 @@ var messagelTemplate = template.
 		Delims("[[", "]]").
 		Parse(messageHTML))
 
+// ipHashSalt is used for hashing IP addresses to protect user privacy
+// In production, this should be set via the IP_HASH_SALT environment variable
+var ipHashSalt string
+
+func init() {
+	ipHashSalt = os.Getenv("IP_HASH_SALT")
+	if ipHashSalt == "" {
+		// Generate a default salt (WARNING: in production, use environment variable)
+		ipHashSalt = "default-salt-change-in-production"
+		Error("IP_HASH_SALT environment variable not set, using default (NOT FOR PRODUCTION)")
+	}
+}
+
+// HashIP creates a one-way hash of an IP address for privacy-compliant logging
+// This function is used to comply with GDPR/CCPA requirements by not storing
+// plain IP addresses in logs. The hash is consistent for the same IP within
+// a deployment (using the IP_HASH_SALT), allowing for session tracking while
+// protecting user privacy.
+func HashIP(ip string) string {
+	h := sha256.Sum256([]byte(ip + ipHashSalt))
+	// Use first 8 bytes (16 hex chars) for shorter logs while maintaining uniqueness
+	return hex.EncodeToString(h[:8])
+}
+
 // MessageHandler renders a minimal HTML page using messagelTemplate. The page
 // displays a message and performs a client-side redirect to redirectUrl after
 // timeoutSec seconds via a meta-refresh tag.
@@ -190,63 +217,71 @@ func IsHacker(r *http.Request) bool {
 	c := r.Context()
 
 	// Quickly reject IPs that were previously flagged as malicious.
-	if gcp.GetMemCacheString(c, "hacker-"+r.RemoteAddr) != "" {
-		Info("IsHacker: Repeat IP %v", r.RemoteAddr)
+	// Hash IP address for privacy compliance (GDPR/CCPA)
+	ipHash := HashIP(r.RemoteAddr)
+
+	if gcp.GetMemCacheString(c, "hacker-"+ipHash) != "" {
+		// Don't log actual IP address - use hash for privacy
+		Debug("IsHacker: Repeat request from cached IP hash")
 		return true
 	}
 
 	// Block requests with spammy referrers.
 	if IsSpam(c, r.Referer()) {
 		Info("IsHacker: Is Spam")
-		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+ipHash, "1", 4)
 		return true
 	}
 
 	// Empty user agents are suspicious.
 	if r.UserAgent() == "" {
 		Info("IsHacker: UserAgent empty")
-		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+ipHash, "1", 4)
 		return true
 	}
 
 	// Reject attempts to access PHP scripts.
 	if strings.Contains(r.URL.Path, ".php") {
 		Info("IsHacker: Requesting .php page, rejecting: %v", r.URL.Path)
-		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+ipHash, "1", 4)
 		return true
 	}
 
 	// WordPress probing is treated as malicious.
 	if strings.HasPrefix(r.URL.Path, "/wp/") {
 		Info("IsHacker: WordPress path: %v", r.URL.Path)
-		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+ipHash, "1", 4)
 		return true
 	}
 
 	if strings.HasPrefix(r.URL.Path, "/wp-content/") {
 		Info("IsHacker: WordPress path: %v", r.URL.Path)
-		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+ipHash, "1", 4)
 		return true
 	}
 
 	// Old blog paths are not served anymore; accessing them is suspicious.
 	if strings.HasPrefix(r.URL.Path, "/blog/") {
 		Info("IsHacker: Blog path: %v", r.URL.Path)
-		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+ipHash, "1", 4)
 		return true
 	}
 
 	if strings.HasPrefix(r.URL.Path, "/wordpress/") {
 		Info("IsHacker: WordPress path: %v", r.URL.Path)
-		gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+		gcp.SetMemCacheString(c, "hacker-"+ipHash, "1", 4)
 		return true
 	}
 
-	// Temporary country based block used during a spam campaign.
+	// Geographic-based filtering for specific abuse patterns
+	// NOTE: Geographic blocking may have GDPR implications - ensure legal basis
+	// is documented and justified (e.g., fraud prevention, security incident response)
+	// Consider: Is this blocking still necessary? Review with legal/compliance team.
 	if r.Header.Get("X-AppEngine-Country") == "UA" {
 		if (r.Header.Get("X-AppEngine-City") == "lviv") || (r.Header.Get("X-AppEngine-City") == "kyiv") {
-			Info("IsHacker: Ukraine traffic - City : %v", r.Header.Get("X-AppEngine-City"))
-			gcp.SetMemCacheString(c, "hacker-"+r.RemoteAddr, "1", 4)
+			// Log aggregate data only, not specific city for privacy
+			Info("IsHacker: Suspicious pattern detected from region: UA")
+			gcp.SetMemCacheString(c, "hacker-"+ipHash, "1", 4)
 			return true
 		}
 	}
@@ -353,4 +388,78 @@ func IsCrawler(r *http.Request) bool {
 	ua := user_agent.New(r.Header.Get("User-Agent"))
 	return ua.Bot()
 
+}
+
+// GetCSRFToken returns the CSRF token from the request for template injection
+// This is a convenience wrapper around csrf.GetToken() for use in templates
+func GetCSRFToken(r *http.Request) string {
+	cookie, err := r.Cookie("csrf_token")
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+// SecurityHeadersMiddleware adds security headers to all HTTP responses
+// This middleware should be applied to all HTTP handlers to protect against
+// common web vulnerabilities including XSS, clickjacking, and MIME-sniffing attacks.
+//
+// Headers set:
+//   - X-Frame-Options: DENY (prevents clickjacking)
+//   - X-Content-Type-Options: nosniff (prevents MIME-sniffing)
+//   - X-XSS-Protection: 1; mode=block (legacy XSS protection)
+//   - Content-Security-Policy: restricts resource loading (configurable via env)
+//   - Referrer-Policy: strict-origin-when-cross-origin (controls referrer info)
+//   - Strict-Transport-Security: enforces HTTPS (when using HTTPS)
+//   - Permissions-Policy: restricts browser features
+//
+// Usage:
+//
+//	mux := http.NewServeMux()
+//	mux.HandleFunc("/", homeHandler)
+//	secureHandler := common.SecurityHeadersMiddleware(mux)
+//	http.ListenAndServe(":8080", secureHandler)
+func SecurityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Prevent clickjacking by blocking iframe embedding
+		w.Header().Set("X-Frame-Options", "DENY")
+
+		// Prevent MIME type sniffing
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+
+		// Enable XSS filter in legacy browsers
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+
+		// Content Security Policy - adjust based on application needs
+		// This is a strict baseline policy
+		csp := "default-src 'self'; " +
+			"script-src 'self'; " +
+			"style-src 'self' 'unsafe-inline'; " + // unsafe-inline needed for some frameworks
+			"img-src 'self' data: https:; " +
+			"font-src 'self'; " +
+			"connect-src 'self'; " +
+			"frame-ancestors 'none'; " +
+			"base-uri 'self'; " +
+			"form-action 'self'"
+
+		// Allow override via environment variable for flexibility
+		if envCSP := os.Getenv("CONTENT_SECURITY_POLICY"); envCSP != "" {
+			csp = envCSP
+		}
+		w.Header().Set("Content-Security-Policy", csp)
+
+		// Control referrer information leakage
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+
+		// HSTS (only on HTTPS connections)
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			// max-age=31536000 is 1 year
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+		}
+
+		// Permissions Policy (restrict browser features)
+		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=()")
+
+		next.ServeHTTP(w, r)
+	})
 }

@@ -1,48 +1,101 @@
-# Repo Overview
+# AGENTS.md - Guide for AI Agents
 
-This repository contains small helper packages used in personal projects. Below is a high level description of each source file so that a GenAI agent can understand how they fit together.
+This file provides a guide for any AI agent working with the `github.com/patdeg/common` repository. Use this context to understand the project structure, conventions, and goals.
 
-## Root package (`common`)
-- **common.go** – declares shared variables such as `ISDEBUG` and `VERSION`.
-- **convert.go** – miscellaneous conversion utilities (string/number conversions, rounding, camel case, etc.).
-- **convert_test.go** – tests for `CamelCase` from `convert.go`.
-- **cookie.go** – visitor cookie helpers (create, read, clear) and `Visitor` struct.
-- **cookie_test.go** – tests cookie creation and attributes.
-- **crypt.go** – MD5 and CRC32 helpers plus AES based `Encrypt`/`Decrypt` functions.
-- **debug.go** – utilities for dumping HTTP requests, responses and cookies for debugging.
-- **file.go** – reads file contents.
-- **interfaces.go** – generic routines to marshal/unmarshal JSON/XML and manage HTTP bodies.
-- **logging.go** – simple Debug/Info/Error logging that respects `ISDEBUG`.
-- **slice.go** – slice helper routines like `AddIfNotExists`.
-- **url.go** – validation helper for HTTP/HTTPS URLs.
-- **url_test.go** – tests for `url.go`.
-- **web.go** – assorted web utilities: service account HTTP client, spam/bot detection, and helper HTML template rendering.
+## ⚠️ CRITICAL SECURITY NOTICE
 
-## `gcp` package
-- **appengine.go** – extracts the App Engine version and sets the `VERSION` variable.
-- **bigquery.go** – helpers to authenticate with BigQuery, create datasets/tables and stream rows.
-- **datastore.go** – helper to fetch the first datastore entity in a query.
-- **memcache.go** – wrappers for App Engine memcache operations on bytes and objects.
-- **user.go** – datastore storage of users and roles.
-- **user_test.go** – tests `EnsureUserExists` and `GetUserRole`.
+**THIS IS A PUBLIC REPOSITORY.** Under no circumstances should you ever commit:
+- API keys, tokens, or secrets.
+- Personal information (PII) of any kind.
+- Credentials, passwords, or auth tokens.
+- Any sensitive data.
 
-## `ga` package
-- **ga.go** – Google Analytics tracking helpers and structures for events.
+All configuration and secrets must be loaded from environment variables. Use placeholders and example domains (`example.com`) in the code.
 
-These files depend on each other via the exported helpers. For example `web.go` uses `memcache`, `logging` and `convert`; BigQuery functions log via `logging.go` and use utilities from `crypt.go` and `convert.go`.
+## Project Overview
 
-## `track` package
-- **base.go** – package constants including dataset names and the 1×1 PNG used for pixel tracking.
-- **config.go** – small helper `getEnv` used across the package.
-- **types.go** – structures describing visits and robot hits.
-- **adwords.go** – AdWords click tracking. Stores clicks in BigQuery and provides HTTP handlers.
-- **bigquery_helpers.go** – helper `insertWithTableCreation` to stream data and create tables when needed.
-- **bigquery_store.go** – streams `Visit` or `Event` data to BigQuery using helpers in `bigquery_helpers.go` and `common`.
-- **bigquery_tables.go** – functions to create daily BigQuery tables for visits and events.
-- **handlers.go** – HTTP handlers used to create the tables or record pixel/click tracking.
-- **tracker.go** – core tracking logic for visits, events and bots. Uses memcache and the other helpers above.
+This repository, `common`, is a Go library containing shared utility packages. Its purpose is to provide a centralized location for code that is reused across multiple web applications and services, promoting consistency and reducing duplication.
 
-## `auth` package
-- **auth.go** – Google OAuth helper. Handles login redirect and callback, sets cookies and records login events via the `track` and `common` packages.
+### Core Principles
+1.  **Security**: The codebase must remain secure and free of sensitive data.
+2.  **Reliability**: Code should be robust and well-tested.
+3.  **Clarity**: Code must be well-documented and easy to understand.
+4.  **Compatibility**: Changes should not break existing functionality.
 
-Overall, the `track` and `auth` packages build on the utilities from the root `common` package. BigQuery helpers and logging are shared across the repository.
+## Package Organization
+
+The library is organized into packages based on functionality:
+
+*   **Core Utilities (`/`):** Foundational helpers for tasks like type conversion (`convert`), cryptography (`crypt`), and logging (`logging`).
+*   **Web & API (`/`):** HTTP-related utilities, including security middleware (`web`), cookie management (`cookie`), and CSRF protection (`csrf`).
+*   **GCP Integration (`/gcp`, `/datastore`, `/bigquery`):** Helpers for interacting with Google Cloud Platform services like Datastore and BigQuery.
+*   **Application Features (`/auth`, `/email`, etc.):** Components for higher-level functionality such as user authentication and sending emails.
+*   **Analytics (`/ga`, `/track`):** Tools for Google Analytics and custom event tracking.
+
+## Building and Running
+
+### Installation
+
+To use this library in another Go project, run:
+```bash
+go get github.com/patdeg/common
+```
+
+### Testing Commands
+
+The project has a suite of tests. Use the following commands to validate changes:
+
+```bash
+# Run all tests in the repository
+go test ./...
+
+# Run tests with the race detector to find concurrency issues
+go test -race ./...
+
+# Calculate and view code coverage
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
+
+### Running Examples
+
+The `examples/` directory shows how to use the library. To run an example:
+```bash
+cd examples/basic-usage
+go run main.go
+```
+
+## Key Development Guidelines
+
+### Code Style
+- Follow standard Go formatting (`gofmt`).
+- All exported functions, types, and variables must have clear documentation comments.
+
+### Error Handling
+- Functions should return errors instead of panicking.
+- Provide context when wrapping errors (e.g., `fmt.Errorf("doing X failed: %w", err)`).
+
+### Environment Variables
+Configuration and secrets must be loaded from the environment. Do not hardcode them.
+
+```go
+// Correct: Load from environment.
+apiKey := os.Getenv("API_KEY")
+if apiKey == "" {
+    log.Fatal("API_KEY environment variable not set")
+}
+
+// Incorrect: Hardcoded secret. Do not do this.
+apiKey := "pa_12345..."
+```
+
+### Dependencies
+- Keep external dependencies to a minimum.
+- Lower-level packages should not import higher-level packages.
+
+## Security Checklist
+
+Before committing, always double-check:
+- [ ] Is the code free of any credentials or secrets?
+- [ ] Is there any personal or user data in the changes?
+- [ ] Are all sensitive values loaded from the environment?

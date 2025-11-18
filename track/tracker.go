@@ -193,8 +193,8 @@ func TrackEventDetails(w http.ResponseWriter, r *http.Request, cookie, category,
 
 		// Use memcache to deduplicate events. The key is based on a hash
 		// of the remote address and user agent to approximate a visitor
-		// session.
-		uniqueId := common.MD5(reqCopy.RemoteAddr + reqCopy.Header.Get("User-Agent"))
+		// session. Using SHA-256 instead of MD5 for better security.
+		uniqueId := common.SecureHash(reqCopy.RemoteAddr + reqCopy.Header.Get("User-Agent"))
 		session := ""
 		item, err := memcache.Get(c, "s-"+uniqueId)
 		if err != nil {

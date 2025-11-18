@@ -99,8 +99,14 @@ func GetCookieID(w http.ResponseWriter, r *http.Request) string {
 	if err != nil || cookie == nil || cookie.Value == "" {
 		Debug("Error: %v", err)
 		Debug("New Cookie...")
-		ts := strconv.FormatInt(time.Now().UnixNano(), 10)
-		id = MD5(ts + r.RemoteAddr)
+		// Generate cryptographically secure random ID instead of MD5 hash
+		id, err = GenerateSecureID()
+		if err != nil {
+			Error("Failed to generate secure cookie ID: %v", err)
+			// Fallback: use SHA-256 of timestamp + IP (still better than MD5)
+			ts := strconv.FormatInt(time.Now().UnixNano(), 10)
+			id = SecureHash(ts + r.RemoteAddr)
+		}
 		host := r.Host
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h

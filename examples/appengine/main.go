@@ -30,6 +30,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/patdeg/common"
 	"github.com/patdeg/common/auth"
@@ -46,6 +47,13 @@ func HelloHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// The HTTP server listens on the port specified by the PORT environment
+	// variable. It defaults to 8080 when unset.
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	// The root path requires login and displays a greeting.
 	http.HandleFunc("/", HelloHandler)
 
@@ -57,12 +65,16 @@ func main() {
 	// cookie before redirecting back to the requested page.
 	http.HandleFunc("/goog_callback", auth.GoogleCallbackHandler)
 
-	// The HTTP server listens on the port specified by the PORT environment
-	// variable. It defaults to 8080 when unset.
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	// Create an HTTP server with sensible timeouts to avoid slowloris and
+	// similar attacks. These values are safe defaults for most applications.
+	server := &http.Server{
+		Addr:         ":" + port,
+		Handler:      nil, // Default ServeMux
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
+
 	common.Info("Starting server on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(server.ListenAndServe())
 }

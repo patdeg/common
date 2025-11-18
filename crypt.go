@@ -16,27 +16,42 @@ package common
 
 // This file provides small cryptographic helpers used across the repository.
 //
-// MD5 and Hash return the MD5 checksum and CRC32 hash of a given string.
+// SecureHash and GenerateSecureID provide cryptographically secure hashing and ID generation.
+// Hash returns the CRC32 hash of a given string (for non-security checksums).
 // Encrypt and Decrypt perform authenticated encryption using AES-GCM.
+//
+// DEPRECATED: MD5() is deprecated and should not be used for security purposes.
+// Use SecureHash() for integrity checking or GenerateSecureID() for identifiers.
 
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"hash/crc32"
-	"io"
 
 	"golang.org/x/net/context"
 )
 
-func MD5(data string) string {
-	h := md5.New()
-	io.WriteString(h, data)
-	return fmt.Sprintf("%x", h.Sum(nil))
+// SecureHash generates a SHA-256 hash of the input string
+// Use this for hashing non-secret data where integrity matters (e.g., asset versioning)
+// For secret data, use HMAC or password hashing functions like bcrypt
+func SecureHash(data string) string {
+	h := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(h[:])
+}
+
+// GenerateSecureID creates a cryptographically secure random identifier
+// Use this for session IDs, cookie IDs, tokens, or any security-sensitive identifier
+// Returns a 64-character hex string (32 bytes of entropy / 256 bits)
+func GenerateSecureID() (string, error) {
+	b := make([]byte, 32) // 256 bits of entropy
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate secure ID: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func Hash(data string) uint32 {

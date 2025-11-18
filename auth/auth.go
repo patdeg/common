@@ -193,15 +193,31 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // googleUserEmail fetches the authenticated user's email address using the
-// provided OAuth access token. An empty string is returned if the request fails
-// or the response cannot be decoded.
+// provided OAuth access token. The token is passed via the Authorization header
+// (not URL parameter) to prevent exposure in logs, proxies, and browser history.
+// An empty string is returned if the request fails or the response cannot be decoded.
 func googleUserEmail(c context.Context, token string) (string, error) {
 	client := urlfetch.Client(c)
-	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token)
+
+	// Create request with Authorization header instead of URL parameter
+	// This prevents the access token from appearing in URLs, logs, or proxy caches
+	req, err := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v2/userinfo", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		common.Error("Google userinfo request failed with status: %d", resp.StatusCode)
+		return "", nil
+	}
+
 	var data struct{ Email string }
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return "", err

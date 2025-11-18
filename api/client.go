@@ -261,7 +261,9 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*Response,
 			// Read the entire body to store for retries
 			var err error
 			bodyBytes, err = io.ReadAll(req.Body)
-			req.Body.Close()
+			if cerr := req.Body.Close(); cerr != nil {
+				common.Error("[API] Failed to close request body after read: %v", cerr)
+			}
 			if err != nil {
 				return nil, fmt.Errorf("failed to read request body: %v", err)
 			}
@@ -296,7 +298,9 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*Response,
 				reqCopy.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			} else if seeker, ok := req.Body.(io.Seeker); ok {
 				// Reset seekable body
-				seeker.Seek(0, io.SeekStart)
+				if _, err := seeker.Seek(0, io.SeekStart); err != nil {
+					return nil, fmt.Errorf("failed to reset request body: %v", err)
+				}
 				reqCopy.Body = req.Body
 			}
 		}
@@ -310,7 +314,9 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*Response,
 
 		// Read response body
 		bodyData, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		if cerr := resp.Body.Close(); cerr != nil {
+			common.Debug("[API] Failed to close response body: %v", cerr)
+		}
 		if err != nil {
 			lastErr = fmt.Errorf("failed to read response: %v", err)
 			continue

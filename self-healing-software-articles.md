@@ -408,11 +408,12 @@ ERROR: widget agent not found
 3. **Set up API keys**
    ```bash
    # For local development
-   export DEMETER_INTERNAL_GROQ_API_KEY="your-groq-api-key"
+   # EXAMPLE ONLY - Replace with your actual API key
+   export DEMETER_INTERNAL_GROQ_API_KEY="gsk_example_fake_key_replace_with_real"
 
    # For production (use Secret Manager)
    gcloud secrets create internal-groq-api-key \
-     --data-file=<(echo -n "your-groq-api-key") \
+     --data-file=<(echo -n "YOUR_ACTUAL_API_KEY_HERE") \
      --replication-policy=automatic
    ```
 
@@ -425,7 +426,8 @@ ERROR: widget agent not found
 
 1. **Set up SendGrid** (or your email provider)
    ```bash
-   export SENDGRID_API_KEY="your-sendgrid-key"
+   # EXAMPLE ONLY - Replace with your actual SendGrid API key
+   export SENDGRID_API_KEY="SG.example_fake_key.replace_with_real_key"
    ```
 
 2. **Add email callback**
