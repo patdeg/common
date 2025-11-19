@@ -48,3 +48,64 @@ func TestIsValidHTTPURL(t *testing.T) {
 		}
 	}
 }
+
+// TestNormalizeBase checks that NormalizeBase correctly adds https:// prefix
+// and removes trailing slashes.
+func TestNormalizeBase(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"", ""},
+		{"  ", ""},
+		{"example.com", "https://example.com"},
+		{"example.com/", "https://example.com"},
+		{"http://example.com", "http://example.com"},
+		{"http://example.com/", "http://example.com"},
+		{"https://example.com", "https://example.com"},
+		{"https://example.com/", "https://example.com"},
+		{"https://example.com/path", "https://example.com/path"},
+		{"https://example.com/path/", "https://example.com/path"},
+		{"  example.com  ", "https://example.com"},
+		{"example.com:8080", "https://example.com:8080"},
+		{"http://example.com:8080/", "http://example.com:8080"},
+	}
+	for _, tt := range tests {
+		got := NormalizeBase(tt.input)
+		if got != tt.want {
+			t.Errorf("NormalizeBase(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+// TestJoin checks that Join correctly concatenates base URLs and paths.
+func TestJoin(t *testing.T) {
+	tests := []struct {
+		base string
+		path string
+		want string
+	}{
+		{"", "", ""},
+		{"", "/path", ""},
+		{"example.com", "", "https://example.com"},
+		{"example.com", "/path", "https://example.com/path"},
+		{"example.com", "path", "https://example.com/path"},
+		{"example.com/", "/path", "https://example.com/path"},
+		{"https://example.com", "/path", "https://example.com/path"},
+		{"https://example.com/", "/path", "https://example.com/path"},
+		{"https://example.com", "path", "https://example.com/path"},
+		{"https://example.com/base", "/path", "https://example.com/base/path"},
+		{"https://example.com/base/", "/path", "https://example.com/base/path"},
+		{"http://example.com:8080", "/api/v1", "http://example.com:8080/api/v1"},
+		{"http://example.com:8080/", "/api/v1", "http://example.com:8080/api/v1"},
+		{"https://example.com/api", "/users", "https://example.com/api/users"},
+		{"https://example.com/api/", "/users", "https://example.com/api/users"},
+		{"  example.com  ", "  /path  ", "https://example.com/path"},
+	}
+	for _, tt := range tests {
+		got := Join(tt.base, tt.path)
+		if got != tt.want {
+			t.Errorf("Join(%q, %q) = %q, want %q", tt.base, tt.path, got, tt.want)
+		}
+	}
+}

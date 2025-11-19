@@ -105,9 +105,26 @@ errorCtx := map[string]string{
 
 ### URL Utilities (`url.go`)
 
-**Domain:** URL validation for security
+**Domain:** URL validation and construction for security
 
 - **`IsValidHTTPURL(dest string) bool`** - Verifies dest is absolute HTTP/HTTPS URL with valid scheme and host, prevents open redirects
+- **`NormalizeBase(raw string) string`** - Returns sanitized base URL with scheme and no trailing slash; adds https:// prefix if missing; returns empty string for empty input
+- **`Join(rawBase, path string) string`** - Concatenates path with normalized base URL safely; returns empty string if base is empty; handles path prefixes and URL parsing automatically
+
+**Example Usage:**
+```go
+import "github.com/patdeg/common"
+
+// Normalize base URLs
+base := common.NormalizeBase("example.com")  // "https://example.com"
+base = common.NormalizeBase("example.com/")  // "https://example.com"
+base = common.NormalizeBase("http://example.com/")  // "http://example.com"
+
+// Join base URLs with paths
+url := common.Join("example.com", "/api/v1/users")  // "https://example.com/api/v1/users"
+url = common.Join("https://example.com/", "api/v1/users")  // "https://example.com/api/v1/users"
+url = common.Join("https://example.com/api", "/users")  // "https://example.com/api/users"
+```
 
 ### Input Validation (`validation/validation.go`)
 

@@ -14,7 +14,10 @@
 
 package common
 
-import "net/url"
+import (
+	"net/url"
+	"strings"
+)
 
 // Utilities for validating URLs used by callers. The goal is to guard against
 // misconfigured links and open redirects by ensuring only absolute HTTP or HTTPS
@@ -44,4 +47,46 @@ func IsValidHTTPURL(dest string) bool {
 		return false
 	}
 	return true
+}
+
+// NormalizeBase returns a sanitized base URL with scheme and no trailing slash.
+// If the input is empty, an empty string is returned.
+// If the input lacks an http:// or https:// prefix, https:// is added.
+func NormalizeBase(raw string) string {
+	base := strings.TrimSpace(raw)
+	if base == "" {
+		return ""
+	}
+	if !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
+		base = "https://" + base
+	}
+	return strings.TrimSuffix(base, "/")
+}
+
+// Join concatenates the provided path with the normalized base URL.
+// The base URL is normalized using NormalizeBase, and the path is joined safely.
+// If the base is empty after normalization, an empty string is returned.
+// If the path is empty, the normalized base is returned.
+func Join(rawBase, path string) string {
+	base := NormalizeBase(rawBase)
+	if base == "" {
+		return ""
+	}
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return base
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	u, err := url.Parse(base)
+	if err != nil {
+		return base + path
+	}
+	if u.Path == "" || u.Path == "/" {
+		u.Path = path
+	} else {
+		u.Path = strings.TrimRight(u.Path, "/") + path
+	}
+	return u.String()
 }
