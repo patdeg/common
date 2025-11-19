@@ -7,8 +7,10 @@ toolchain go1.24.10
 require (
 	cloud.google.com/go/bigquery v1.69.0
 	cloud.google.com/go/datastore v1.20.0
+	cloud.google.com/go/kms v1.23.2
 	github.com/mssola/user_agent v0.6.0
 	github.com/oklog/ulid/v2 v2.1.1
+	github.com/pkoukk/tiktoken-go v0.1.8
 	golang.org/x/net v0.43.0
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/time v0.12.0
@@ -22,9 +24,9 @@ require (
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.8.0 // indirect
 	cloud.google.com/go/iam v1.5.2 // indirect
-	cloud.google.com/go/kms v1.23.2 // indirect
 	cloud.google.com/go/longrunning v0.6.7 // indirect
 	github.com/apache/arrow/go/v15 v15.0.2 // indirect
+	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

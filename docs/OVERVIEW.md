@@ -2,7 +2,7 @@
 
 This document provides a comprehensive overview of all functions in the `github.com/patdeg/common` package, organized by domain. Use this to identify helper functions you may want to import or replace with common's implementations.
 
-**Last Updated:** 2025-11-18 (Added geo package, web/security middleware, and kmsproviders package)
+**Last Updated:** 2025-11-18 (Added llm/tokenizer package, geo package, web/security middleware, and kmsproviders package)
 
 ---
 
@@ -216,6 +216,55 @@ log.Printf("Using key: %s", kmsproviders.MaskKey(decrypted)) // "sk-1...cdef"
 ---
 
 ## 🤖 LLM Utilities
+
+### Token Counting & BYOW Costing (`llm/tokenizer/tokenizer.go`)
+
+**Domain:** LLM token counting using tiktoken with BYOW pricing calculations
+
+**Types:**
+- **`TokenCounter`** - Token counter using cl100k_base encoding (GPT-4, GPT-3.5-turbo, Groq compatible)
+
+**Functions:**
+- **`NewTokenCounter() (*TokenCounter, error)`** - Creates token counter with cl100k_base encoding
+- **`(*TokenCounter) CountTokens(text string) int`** - Counts tokens in text using cl100k_base
+- **`(*TokenCounter) CountTokensMultiple(texts []string) int`** - Counts tokens across multiple text strings
+- **`(*TokenCounter) CalculateBYOWCost(inputTokens, outputTokens int64) float64`** - Calculates BYOW cost ($0.03 per 1M input, $0.12 per 1M output)
+- **`CountTokensGlobal(text string) int`** - Convenient global function using singleton TokenCounter
+
+**Example Usage:**
+```go
+import "github.com/patdeg/common/llm/tokenizer"
+
+// Create token counter
+tc, err := tokenizer.NewTokenCounter()
+if err != nil {
+    return err
+}
+
+// Count tokens
+inputTokens := tc.CountTokens("What is the capital of France?")
+outputTokens := tc.CountTokens("The capital of France is Paris.")
+
+// Calculate BYOW cost
+cost := tc.CalculateBYOWCost(int64(inputTokens), int64(outputTokens))
+fmt.Printf("Cost: $%.6f\n", cost)
+
+// Or use global function for convenience
+tokens := tokenizer.CountTokensGlobal("Hello, world!")
+```
+
+**Features:**
+- cl100k_base encoding (standard for modern OpenAI models)
+- Compatible with Groq models for consistent token counting
+- BYOW pricing: $0.03 per 1M input tokens, $0.12 per 1M output tokens
+- Singleton pattern for convenient global access
+- Automatic memory management via Go GC
+
+**Use Cases:**
+- Pre-request token estimation
+- BYOW (Bring Your Own Workflow) billing
+- Accounting and cost tracking
+- Multi-message conversation token counting
 
 ### Prompt Processing (`llmutils/processor.go`)
 

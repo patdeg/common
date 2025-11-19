@@ -119,7 +119,7 @@ func Warn(format string, v ...interface{}) {
 // If ERROR_DATASTORE_ENTITY is set, also stores the error in Datastore.
 func Error(format string, v ...interface{}) {
 	errorMsg := fmt.Sprintf(format, v...)
-	log.Printf("ERROR: " + errorMsg + "\n")
+	log.Printf("ERROR: %s\n", errorMsg)
 
 	// Store in Datastore if configured
 	if ERROR_DATASTORE_ENTITY != "" && errorClient != nil {
@@ -150,7 +150,7 @@ func Error(format string, v ...interface{}) {
 // The function logs the message and then calls os.Exit(1).
 func Fatal(format string, v ...interface{}) {
 	errorMsg := fmt.Sprintf(format, v...)
-	log.Printf("FATAL: " + errorMsg + "\n")
+	log.Printf("FATAL: %s\n", errorMsg)
 
 	// Store in Datastore if configured (best effort, don't wait)
 	if ERROR_DATASTORE_ENTITY != "" && errorClient != nil {
