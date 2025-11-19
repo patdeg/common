@@ -30,3 +30,19 @@ func getEnv(key, defaultVal string) string {
 	}
 	return defaultVal
 }
+
+// ConfigureTouchpoints overrides the default BigQuery project and dataset used
+// for touch point events. Empty values are ignored, allowing callers to update
+// only one of the parameters.
+//
+// Typical usage at application startup:
+//
+//	track.ConfigureTouchpoints("my-project", "marketing_touchpoints")
+func ConfigureTouchpoints(projectID, datasetID string) {
+	if projectID != "" {
+		touchpointsProjectID = projectID
+	}
+	if datasetID != "" {
+		touchpointsDataset = datasetID
+	}
+}

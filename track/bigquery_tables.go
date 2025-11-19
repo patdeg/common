@@ -141,3 +141,45 @@ func createEventsTableInBigQuery(c context.Context, d string) error {
 	}
 	return gcp.CreateTableInBigQuery(c, newTable)
 }
+
+// createTouchpointsTableInBigQuery creates a daily touch points table in
+// BigQuery using the provided date string `d` (format YYYYMMDD). The table is
+// designed for marketing touch point events with a flexible JSON-encoded
+// payload column so that new event fields can be added without schema
+// migrations.
+func createTouchpointsTableInBigQuery(c context.Context, d string) error {
+	common.Info(">>>> createTouchpointsTableInBigQuery")
+
+	if err := gcp.CreateDatasetIfNotExists(c, touchpointsProjectID, touchpointsDataset); err != nil {
+		common.Error("Error ensuring dataset %s: %v", touchpointsDataset, err)
+		return err
+	}
+
+	if len(d) != 8 {
+		return errors.New("table name is badly formatted - expected 8 characters")
+	}
+	newTable := &bigquery.Table{
+		TableReference: &bigquery.TableReference{
+			ProjectId: touchpointsProjectID,
+			DatasetId: touchpointsDataset,
+			TableId:   d,
+		},
+		FriendlyName: "Daily Touchpoints table",
+		Description:  "This table is created automatically to store daily marketing touch point events",
+		Schema: &bigquery.TableSchema{
+			Fields: []*bigquery.TableFieldSchema{
+				{Name: "Time", Type: "TIMESTAMP", Description: "Time"},                    // Timestamp of the touch point
+				{Name: "Category", Type: "STRING", Description: "Category"},               // Event category
+				{Name: "Action", Type: "STRING", Description: "Action"},                   // Event action
+				{Name: "Label", Type: "STRING", Description: "Label"},                     // Event label
+				{Name: "Referer", Type: "STRING", Description: "Referer"},                 // HTTP referer
+				{Name: "Path", Type: "STRING", Description: "Path"},                       // Request path
+				{Name: "Host", Type: "STRING", Description: "Host"},                       // HTTP host header
+				{Name: "RemoteAddr", Type: "STRING", Description: "RemoteAddr"},           // Client IP address
+				{Name: "UserAgent", Type: "STRING", Description: "UserAgent"},             // User-Agent header
+				{Name: "Payload", Type: "STRING", Description: "JSON-encoded event data"}, // JSON payload with arbitrary event fields
+			},
+		},
+	}
+	return gcp.CreateTableInBigQuery(c, newTable)
+}

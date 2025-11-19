@@ -114,3 +114,29 @@ type RobotPage struct {
 	// BotVersion is the bot version parsed from the user agent.
 	BotVersion string `json:"botVersion,omitempty"`
 }
+
+// TouchPointEvent captures a marketing touch point for web visitors. It records
+// standard event metadata (category, action, label) plus request context and a
+// JSON-encoded payload for event specific fields such as UTM parameters.
+type TouchPointEvent struct {
+	// Time is when the touch point occurred.
+	Time time.Time `json:"time,omitempty"`
+	// Category groups touch points by high-level category (for example "landing" or "campaign").
+	Category string `json:"category,omitempty"`
+	// Action describes what happened (for example "view" or "cta_click").
+	Action string `json:"action,omitempty"`
+	// Label provides an optional label for the touch point.
+	Label string `json:"label,omitempty"`
+	// Referer holds the HTTP Referer header for the request.
+	Referer string `json:"referer,omitempty"`
+	// Path is the HTTP request path (for example "/pricing").
+	Path string `json:"path,omitempty"`
+	// Host is the HTTP host serving the request.
+	Host string `json:"host,omitempty"`
+	// RemoteAddr is the client IP address.
+	RemoteAddr string `json:"remoteAddr,omitempty"`
+	// UserAgent captures the full user agent string for the visitor.
+	UserAgent string `json:"userAgent,omitempty"`
+	// PayloadJSON stores a JSON-encoded payload with arbitrary event fields.
+	PayloadJSON string `json:"payloadJson,omitempty"`
+}

@@ -32,6 +32,7 @@ package track
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -261,6 +262,86 @@ func TrackEventDetails(w http.ResponseWriter, r *http.Request, cookie, category,
 func TrackEvent(w http.ResponseWriter, r *http.Request, cookie string) {
 	common.Info(">>>> TrackEvent")
 	TrackEventDetails(w, r, cookie, r.FormValue("c"), r.FormValue("a"), r.FormValue("l"), common.S2F(r.FormValue("v")))
+}
+
+// TrackTouchPoint records a marketing touch point event for a visitor. It is
+// designed for use from HTTP handlers serving marketing or landing pages and
+// focuses on capturing referral traffic and campaign parameters.
+//
+// The function runs asynchronously in a goroutine so that BigQuery streaming
+// latency does not impact the HTTP response time. The provided payload map is
+// JSON-encoded and stored in the Payload column together with standard fields
+// such as category, action, label, referer and request path.
+func TrackTouchPoint(r *http.Request, category, action, label string, payload map[string]any) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			fmt.Printf("Recovered panic in TrackTouchPoint: %v\n", rec)
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	reqCopy := r.Clone(ctx)
+
+	go func() {
+		c := ctx
+		common.Info(">>>> TrackTouchPoint")
+
+		// Ignore obvious bot traffic to keep marketing analytics clean.
+		uaHeader := reqCopy.Header.Get("User-Agent")
+		if common.IsBot(uaHeader) {
+			common.Info("TrackTouchPoint: Events from Bots, ignoring")
+			return
+		}
+		if reqCopy.Header.Get("X-AppEngine-Country") == "ZZ" {
+			common.Info("TrackTouchPoint: Country is ZZ - most likely a bot, ignoring")
+			return
+		}
+
+		// Build payload with UTM parameters and any custom fields provided by caller.
+		eventPayload := map[string]any{}
+		for k, v := range payload {
+			eventPayload[k] = v
+		}
+
+		q := reqCopy.URL.Query()
+		for _, key := range []string{"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"} {
+			if v := q.Get(key); v != "" {
+				eventPayload[key] = v
+			}
+		}
+
+		// Always include the full URL so downstream analysis can reconstruct landing context.
+		eventPayload["url"] = reqCopy.URL.String()
+
+		payloadJSON := ""
+		if len(eventPayload) > 0 {
+			if b, err := json.Marshal(eventPayload); err != nil {
+				common.Error("TrackTouchPoint: failed to marshal payload: %v", err)
+			} else {
+				payloadJSON = string(b)
+			}
+		}
+
+		tp := &TouchPointEvent{
+			Time:        time.Now(),
+			Category:    common.Trunc500(category),
+			Action:      common.Trunc500(action),
+			Label:       common.Trunc500(label),
+			Referer:     reqCopy.Header.Get("Referer"),
+			Path:        reqCopy.URL.Path,
+			Host:        reqCopy.Host,
+			RemoteAddr:  reqCopy.RemoteAddr,
+			UserAgent:   uaHeader,
+			PayloadJSON: payloadJSON,
+		}
+
+		if err := StoreTouchPointInBigQuery(c, tp); err != nil {
+			common.Error("Error while storing touch point in BigQuery: %v", err)
+		} else {
+			common.Info("Touch point stored in BigQuery")
+		}
+	}()
 }
 
 func TrackRobots(r *http.Request) {

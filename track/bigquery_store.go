@@ -89,6 +89,37 @@ func eventInsertRequest(v *Visit, now time.Time) *bigquery.TableDataInsertAllReq
 	return req
 }
 
+// touchPointInsertRequest builds the BigQuery request used by
+// StoreTouchPointInBigQuery. The insertId combines the current timestamp in
+// nanoseconds with the RemoteAddr to provide a reasonably unique identifier
+// while still allowing BigQuery to de-duplicate retried inserts.
+func touchPointInsertRequest(tp *TouchPointEvent, now time.Time) *bigquery.TableDataInsertAllRequest {
+	insertId := strconv.FormatInt(now.UnixNano(), 10) + "-" + tp.RemoteAddr
+
+	req := &bigquery.TableDataInsertAllRequest{
+		Kind: "bigquery#tableDataInsertAllRequest",
+		Rows: []*bigquery.TableDataInsertAllRequestRows{
+			{
+				InsertId: insertId,
+				Json: map[string]bigquery.JsonValue{
+					"Time":       tp.Time,
+					"Category":   tp.Category,
+					"Action":     tp.Action,
+					"Label":      tp.Label,
+					"Referer":    tp.Referer,
+					"Path":       tp.Path,
+					"Host":       tp.Host,
+					"RemoteAddr": tp.RemoteAddr,
+					"UserAgent":  tp.UserAgent,
+					"Payload":    tp.PayloadJSON,
+				},
+			},
+		},
+	}
+
+	return req
+}
+
 func StoreVisitInBigQuery(c context.Context, v *Visit) error {
 	common.Info(">>>> StoreVisitInBigQuery")
 	common.Debug("Dataset=%s", visitsDataset)
@@ -115,4 +146,18 @@ func StoreEventInBigQuery(c context.Context, v *Visit) error {
 	common.Debug("Table=%s", tableName)
 
 	return insertWithTableCreation(c, bqProjectID, eventsDataset, tableName, req, createEventsTableInBigQuery)
+}
+
+// StoreTouchPointInBigQuery streams a TouchPointEvent to BigQuery. The dataset
+// and daily table are created on demand if they do not already exist.
+func StoreTouchPointInBigQuery(c context.Context, e *TouchPointEvent) error {
+	common.Info(">>>> StoreTouchPointInBigQuery")
+	common.Debug("Dataset=%s Project=%s", touchpointsDataset, touchpointsProjectID)
+
+	req := touchPointInsertRequest(e, time.Now())
+
+	tableName := time.Now().Format("20060102")
+	common.Debug("Table=%s", tableName)
+
+	return insertWithTableCreation(c, touchpointsProjectID, touchpointsDataset, tableName, req, createTouchpointsTableInBigQuery)
 }

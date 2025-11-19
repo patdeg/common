@@ -26,11 +26,13 @@ package track
 // Dataset and project IDs are read from environment variables when available,
 // otherwise the defaults below are used.
 var (
-	bqProjectID      = getEnv("BQ_PROJECT_ID", "mygotome")
-	visitsDataset    = getEnv("VISITS_DATASET", "visits")
-	eventsDataset    = getEnv("EVENTS_DATASET", "events")
-	adwordsProjectID = getEnv("ADWORDS_PROJECT_ID", "mygotome")
-	adwordsDataset   = getEnv("ADWORDS_DATASET", "adwords")
+	bqProjectID          = getEnv("BQ_PROJECT_ID", "mygotome")
+	visitsDataset        = getEnv("VISITS_DATASET", "visits")
+	eventsDataset        = getEnv("EVENTS_DATASET", "events")
+	touchpointsProjectID = getEnv("TOUCHPOINTS_PROJECT_ID", bqProjectID)
+	touchpointsDataset   = getEnv("TOUCHPOINTS_DATASET", "touchpoints")
+	adwordsProjectID     = getEnv("ADWORDS_PROJECT_ID", "mygotome")
+	adwordsDataset       = getEnv("ADWORDS_DATASET", "adwords")
 )
 
 const onePixelPNG = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a\x00\x00\x00\x0d\x49\x48" +
