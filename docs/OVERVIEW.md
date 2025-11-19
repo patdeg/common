@@ -149,6 +149,98 @@ if v.HasErrors() {
 
 ---
 
+## 🤖 LLM Utilities
+
+### Prompt Processing (`llmutils/processor.go`)
+
+**Domain:** LLM prompt template processing with comment stripping and metadata extraction
+
+**Types:**
+- **`ProcessedPrompt`** - Result struct containing cleaned prompt and extracted metadata
+  - `CleanedPrompt string` - Prompt with all /// comments removed
+  - `Params map[string]string` - Extracted metadata from /// param: directives
+  - `Metadata map[string]string` - All extracted key-value pairs
+  - `Flow string` - Application flow name (from /// flow: directive)
+  - `Node string` - Node/step name (from /// node: directive)
+  - `Tags []string` - Additional tags extracted
+
+**Comment Processing:**
+- **`Process(content string) ProcessedPrompt`** - Removes /// comments and extracts all metadata
+- **`StripComments(content string) string`** - Removes comments without metadata extraction, removes blank lines
+- **`ExtractParams(content string) map[string]string`** - Extracts only param: directives
+- **`ExtractMetadata(content string) ProcessedPrompt`** - Extracts only metadata (no prompt cleaning)
+- **`StripCommentsFromMessages(messages []interface{}) []interface{}`** - Strips comments from LLM message arrays
+
+**Features:**
+- Triple-slash (///) comment syntax for documentation
+- Full-line and inline comment support
+- URL protection: http:// and https:// are NOT treated as comments
+- Metadata extraction with multiple directive types:
+  - `/// param: key=value` - Key-value parameters (comma-separated supported)
+  - `/// flow: name` - Application flow tracking
+  - `/// node: name` - Node/step tracking
+  - `/// tag: value` - Tag extraction (comma-separated supported)
+  - `/// key: value` - Generic metadata extraction
+- Blank line removal after comment stripping
+- Unicode and emoji support
+
+**Example Usage:**
+```go
+import "github.com/patdeg/common/llmutils"
+
+prompt := `
+/// This comment will be removed
+/// param: model=gpt-4, temperature=0.7
+/// flow: checkout-process
+/// node: payment-validation
+You are a helpful assistant /// inline comment
+Visit http://example.com for more /// URLs preserved
+`
+
+result := llmutils.Process(prompt)
+// result.CleanedPrompt = "You are a helpful assistant\nVisit http://example.com for more"
+// result.Params = {"model": "gpt-4", "temperature": "0.7"}
+// result.Flow = "checkout-process"
+// result.Node = "payment-validation"
+// result.Tags = ["flow:checkout-process", "node:payment-validation"]
+
+// Or just strip comments
+cleaned := llmutils.StripComments(prompt)
+
+// Or extract only params
+params := llmutils.ExtractParams(prompt)
+```
+
+**Message Array Processing:**
+```go
+messages := []interface{}{
+    map[string]interface{}{
+        "role": "system",
+        "content": "You are helpful /// be nice",
+    },
+    map[string]interface{}{
+        "role": "user",
+        "content": "/// Debug note\nTell me a joke",
+    },
+}
+cleaned := llmutils.StripCommentsFromMessages(messages)
+// Comments removed from all content fields
+```
+
+**Performance:**
+- O(n) complexity where n is number of lines
+- Single pass through content
+- Minimal allocations
+- Efficient string operations with strings.Join
+
+**Security:**
+- Comments removed client-side before LLM API calls
+- Param values NOT sanitized - validate before storing
+- Never put secrets in /// comments
+- Safe for use with untrusted prompt templates
+
+---
+
 ## 🧾 Logging & Monitoring
 
 ### Basic Logging (`logging.go`)
