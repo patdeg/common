@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/bigquery v1.69.0
 	cloud.google.com/go/datastore v1.20.0
 	github.com/mssola/user_agent v0.6.0
+	github.com/oklog/ulid/v2 v2.1.1
 	golang.org/x/net v0.41.0
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/time v0.11.0
