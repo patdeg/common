@@ -6,6 +6,68 @@ This document provides a comprehensive overview of all functions in the `github.
 
 ---
 
+## 🚀 Deployment
+
+### Version Detection (`deployment/version.go`)
+
+**Domain:** Application version detection for cloud environments
+
+- **`Get() string`** - Returns deployment version, detects once and caches for efficiency
+  - Checks environment variables in priority order: DEMETERICS_VERSION, DEPLOYMENT_VERSION, VERSION_NAME, GAE_VERSION, GAE_DEPLOYMENT_ID, K_REVISION, K_SERVICE, APP_VERSION
+  - Falls back to "{ENVIRONMENT}-local" or "development-local" for local development
+  - Thread-safe with sync.Once pattern
+
+**Example Usage:**
+```go
+import "github.com/patdeg/common/deployment"
+
+// Get current deployment version (cached after first call)
+version := deployment.Get()
+// version = "prod-55" on App Engine
+// version = "myservice-00042-abc" on Cloud Run
+// version = "production-local" in local dev
+
+// Use for cache busting in templates
+assetURL := fmt.Sprintf("/static/app.js?v=%s", deployment.Get())
+
+// Use in logging
+log.Printf("Starting app version: %s", deployment.Get())
+
+// Use in error tracking
+errorCtx := map[string]string{
+    "version": deployment.Get(),
+    "environment": os.Getenv("ENVIRONMENT"),
+}
+```
+
+**Features:**
+- Automatic platform detection (App Engine, Cloud Run, custom)
+- Single detection per process (sync.Once pattern)
+- Suitable for cache-busting URLs (no spaces or special characters)
+- Consistent version format across all deployment environments
+- Zero configuration for standard platforms
+
+**Environment Variable Priority:**
+1. **DEMETERICS_VERSION** - Custom version for Demeterics projects
+2. **DEPLOYMENT_VERSION** - Generic custom deployment version
+3. **VERSION_NAME** - Generic version name
+4. **GAE_VERSION** - Google App Engine version (e.g., "prod-55")
+5. **GAE_DEPLOYMENT_ID** - App Engine deployment ID
+6. **K_REVISION** - Cloud Run revision name
+7. **K_SERVICE** - Cloud Run service name
+8. **APP_VERSION** - Generic app version fallback
+9. **ENVIRONMENT-local** - Fallback using ENVIRONMENT variable
+10. **development-local** - Final fallback when no variables are set
+
+**Use Cases:**
+- Cache-busting for static assets in HTML templates
+- Version tracking in structured logs
+- Deployment correlation in error tracking (Sentry, Rollbar, etc.)
+- A/B testing by deployment version
+- Gradual rollout monitoring
+
+---
+
 ## 🔧 Core Utilities
 
 ### Type Conversion (`convert.go`)
