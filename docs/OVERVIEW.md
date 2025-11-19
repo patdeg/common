@@ -2,7 +2,7 @@
 
 This document provides a comprehensive overview of all functions in the `github.com/patdeg/common` package, organized by domain. Use this to identify helper functions you may want to import or replace with common's implementations.
 
-**Last Updated:** 2025-11-18 (Added geo package and web/security middleware)
+**Last Updated:** 2025-11-18 (Added geo package, web/security middleware, and kmsproviders package)
 
 ---
 
@@ -127,6 +127,72 @@ if v.HasErrors() {
 - **`Encrypt(c context.Context, key, message string) string`** - AES-256-GCM authenticated encryption, returns hex-encoded nonce+ciphertext
 - **`Decrypt(c context.Context, key, message string) string`** - Decrypts AES-256-GCM message from Encrypt()
 - **`MD5(data string) string`** - **DEPRECATED** MD5 hash (cryptographically broken, use SecureHash instead)
+
+### KMS Provider Key Encryption (`kmsproviders/encryption.go`)
+
+**Domain:** Third-party provider API key encryption using Google Cloud KMS
+
+**Types:**
+- **`ProviderKeyManager`** - Manages encryption/decryption of third-party provider API keys (OpenAI, Groq, Anthropic, Google)
+- **`ProviderKeySource`** - Indicates key source: "transient" (from header), "cached" (in-memory), or "stored" (KMS-encrypted)
+
+**Manager Creation:**
+- **`NewProviderKeyManager(ctx context.Context, projectID, location, keyRing, keyID string) (*ProviderKeyManager, error)`** - Creates provider key manager with Google Cloud KMS
+
+**Encryption/Decryption:**
+- **`(*ProviderKeyManager) EncryptProviderKey(ctx context.Context, providerKey string) (string, error)`** - Encrypts provider API key using Cloud KMS, returns base64-encoded ciphertext
+- **`(*ProviderKeyManager) DecryptProviderKey(ctx context.Context, userID, provider, encryptedKey string) (string, ProviderKeySource, error)`** - Decrypts provider key with automatic caching (15 minutes)
+
+**Cache Management:**
+- **`(*ProviderKeyManager) InvalidateCache(userID, provider string)`** - Removes specific provider key from cache
+- **`(*ProviderKeyManager) CleanExpiredCache()`** - Removes expired entries (call periodically)
+
+**Utilities:**
+- **`(*ProviderKeyManager) Close() error`** - Closes KMS client
+- **`MaskKey(key string) string`** - Returns masked version for logging (first 4 + last 4 chars)
+
+**Example Usage:**
+```go
+import "github.com/patdeg/common/kmsproviders"
+
+// Create manager
+mgr, err := kmsproviders.NewProviderKeyManager(ctx, "my-project", "global", "my-keyring", "provider-keys")
+if err != nil {
+    return err
+}
+defer mgr.Close()
+
+// Encrypt API key before storage
+encrypted, err := mgr.EncryptProviderKey(ctx, "sk-1234567890abcdef")
+if err != nil {
+    return err
+}
+// Store encrypted in Datastore
+
+// Decrypt API key for use (with automatic caching)
+decrypted, source, err := mgr.DecryptProviderKey(ctx, "user123", "openai", encrypted)
+if err != nil {
+    return err
+}
+log.Printf("Retrieved key from %s", source) // "stored" or "cached"
+
+// Log safely
+log.Printf("Using key: %s", kmsproviders.MaskKey(decrypted)) // "sk-1...cdef"
+```
+
+**Features:**
+- Enterprise-grade encryption using Google Cloud KMS
+- Automatic in-memory caching (15 minutes) to reduce KMS calls
+- SHA-256 hashed cache keys for privacy
+- Per-user, per-provider key isolation
+- Base64 encoding for Datastore storage
+- Structured logging with loggingctx integration
+
+**Security:**
+- Never logs unmasked API keys
+- Cache keys are hashed to avoid storing user IDs in memory
+- KMS integration provides audit trail and key rotation
+- Supports BYOK (Bring Your Own Key) patterns
 
 ### CSRF Protection (`csrf/csrf.go`)
 
