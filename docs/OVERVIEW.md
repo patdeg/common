@@ -2,7 +2,7 @@
 
 This document provides a comprehensive overview of all functions in the `github.com/patdeg/common` package, organized by domain. Use this to identify helper functions you may want to import or replace with common's implementations.
 
-**Last Updated:** 2025-11-18 (Added geo package)
+**Last Updated:** 2025-11-18 (Added geo package and web/security middleware)
 
 ---
 
@@ -354,6 +354,89 @@ loggingctx.LogRequest(r, 200, 45*time.Millisecond, 1024)
 
 ## 🌐 Web & HTTP
 
+### Security Middleware (`web/security.go`)
+
+**Domain:** Production-grade HTTP security middleware and configuration
+
+**Configuration:**
+- **`SecurityConfig`** - Comprehensive security configuration struct
+  - CSP directives (default-src, script-src, style-src, img-src, font-src, connect-src, etc.)
+  - CORS configuration (allowed origins, methods, headers, credentials)
+  - HSTS settings (max-age, includeSubdomains, preload)
+  - Cookie security (Secure, HttpOnly, SameSite, __Host- prefix)
+  - Permissions-Policy settings
+- **`DefaultSecurityConfig() *SecurityConfig`** - Returns production-ready security defaults
+
+**Middleware:**
+- **`SecurityHeadersMiddleware(config *SecurityConfig) func(http.Handler) http.Handler`** - Comprehensive security headers middleware
+  - Sets HSTS with 2-year max-age and preload support
+  - Content Security Policy with upgrade-insecure-requests
+  - Cross-Origin-Opener-Policy and Cross-Origin-Resource-Policy (same-origin)
+  - X-Frame-Options, X-Content-Type-Options, X-XSS-Protection
+  - Permissions-Policy for feature restriction
+  - Referrer-Policy (strict-origin-when-cross-origin)
+  - Removes X-Powered-By and Server headers
+  - No-cache headers for /api/ and /auth/ routes
+- **`CORSMiddleware(config *SecurityConfig) func(http.Handler) http.Handler`** - CORS middleware with strict allowlist approach
+  - Deny-by-default policy
+  - Proper Vary headers for cache safety
+  - Preflight (OPTIONS) handling with 403 for blocked origins
+  - Never echoes "*" when credentials are enabled
+  - Exposes X-Request-ID and rate limit headers
+- **`TLSRedirectMiddleware(next http.Handler) http.Handler`** - HTTPS redirect middleware
+  - Redirects HTTP to HTTPS with 301
+  - Honors X-Forwarded-Proto header (AppEngine/LB friendly)
+
+**Cookie Security:**
+- **`SecureCookieConfig(cookie *http.Cookie, config *SecurityConfig)`** - Applies secure cookie settings
+  - Sets Secure, HttpOnly, SameSite attributes
+  - Automatically applies __Host- prefix when eligible (Secure + Path=/ + no Domain)
+
+**Security Utilities:**
+- **`SanitizeRedirectTarget(raw string, def string) string`** - Open redirect protection
+  - Validates redirect URLs are relative and safe
+  - Rejects absolute URLs, protocol-relative URLs, and host-containing URLs
+  - Preserves query parameters and fragments for safe relative URLs
+- **`RateLimitHeaders(w http.ResponseWriter, limit int, remaining int, resetTime int64)`** - Adds standardized rate limit headers (X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset)
+
+**Example Usage:**
+```go
+import "github.com/patdeg/common/web"
+
+// Create security config
+config := web.DefaultSecurityConfig()
+config.AllowedOrigins = []string{"https://app.example.com"}
+config.AllowedMethods = []string{"GET", "POST", "OPTIONS"}
+config.AllowedHeaders = []string{"Content-Type", "Authorization"}
+
+// Apply middleware
+mux := http.NewServeMux()
+handler := web.SecurityHeadersMiddleware(config)(mux)
+handler = web.CORSMiddleware(config)(handler)
+handler = web.TLSRedirectMiddleware(handler)
+
+http.ListenAndServe(":8080", handler)
+
+// Secure cookie configuration
+cookie := &http.Cookie{Name: "session", Value: "xyz", Path: "/"}
+web.SecureCookieConfig(cookie, config)
+// Cookie now has Secure, HttpOnly, SameSite=Strict, and __Host- prefix
+
+// Sanitize redirect URLs
+target := web.SanitizeRedirectTarget(r.URL.Query().Get("redirect"), "/dashboard")
+http.Redirect(w, r, target, http.StatusSeeOther)
+```
+
+**Security Features:**
+- CSP with upgrade-insecure-requests and strict source controls
+- HSTS with 2-year max-age, includeSubdomains, and preload
+- COOP/CORP for cross-origin isolation (XS-Leaks protection)
+- Permissions-Policy to disable unnecessary browser features
+- __Host- cookie prefix for maximum cookie security
+- Open redirect protection via SanitizeRedirectTarget
+- Vary headers on CORS responses to prevent cache poisoning
+- No-cache for sensitive routes (/api/, /auth/)
+
 ### Cookie Management (`cookie.go`)
 
 **Domain:** Secure cookie operations
@@ -364,10 +447,10 @@ loggingctx.LogRequest(r, 200, 45*time.Millisecond, 1024)
 
 ### Web Utilities (`web.go`)
 
-**Domain:** HTTP handlers, bot detection, security middleware
+**Domain:** HTTP handlers, bot detection, legacy security middleware
 
 - **`HashIP(ip string) string`** - Hashes IP address with salt for GDPR/CCPA compliant logging (uses first 8 bytes of SHA-256)
-- **`SecurityHeadersMiddleware(next http.Handler) http.Handler`** - Middleware setting security headers (X-Frame-Options, CSP, HSTS, X-Content-Type-Options, etc.)
+- **`SecurityHeadersMiddleware(next http.Handler) http.Handler`** - **DEPRECATED:** Use `web.SecurityHeadersMiddleware` from web/security.go instead for production-grade security
 - **`IsBot(r *http.Request) bool`** - Detects bots using user-agent parsing and custom bot list
 - **`IsSpammer(r *http.Request) bool`** - Checks referrer against known spam domain blacklist
 - **`IsHacker(r *http.Request) bool`** - Detects potential attacks (missing User-Agent, spam referrer, cached as hacker)
