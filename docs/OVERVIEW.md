@@ -243,6 +243,56 @@ cleaned := llmutils.StripCommentsFromMessages(messages)
 
 ## 🧾 Logging & Monitoring
 
+### Request Correlation (`loggingctx/`)
+
+**Domain:** Request ID middleware and context utilities for distributed tracing
+
+**Context Management:**
+- **`GetRequestID(ctx context.Context) string`** - Extracts request ID from context, returns empty string if not found
+- **`WithRequestID(ctx context.Context, requestID string) context.Context`** - Returns new context with the given request ID
+
+**HTTP Middleware:**
+- **`RequestIDMiddleware(next http.Handler) http.Handler`** - HTTP middleware that generates/preserves unique request IDs (ULID format, 26 chars)
+  - Checks for existing X-Request-ID header
+  - Generates new ULID if header not present
+  - Stores request ID in context
+  - Adds X-Request-ID to response headers
+
+**Structured Request Logging:**
+- **`LogRequest(r *http.Request, status int, latency time.Duration, bytes int)`** - Logs standardized HTTP request with key metrics (method, path, status, latency, bytes, request ID, remote addr, user agent)
+- **`LogCall(r *http.Request, component, action string, kv ...interface{})`** - Logs handler/API invocations with structured context (component, action, method, path, query, request ID, optional key-value pairs)
+
+**Example Usage:**
+```go
+import "github.com/patdeg/common/loggingctx"
+
+// Add middleware to HTTP server
+mux := http.NewServeMux()
+mux.HandleFunc("/api/users", handleUsers)
+handler := loggingctx.RequestIDMiddleware(mux)
+http.ListenAndServe(":8080", handler)
+
+// Extract request ID in handlers
+func handleUsers(w http.ResponseWriter, r *http.Request) {
+    reqID := loggingctx.GetRequestID(r.Context())
+    // Use reqID for correlation in logs, external API calls, etc.
+
+    // Log the request
+    loggingctx.LogCall(r, "api", "GetUsers", "user_id", "123")
+}
+
+// Log request metrics (typically in middleware)
+loggingctx.LogRequest(r, 200, 45*time.Millisecond, 1024)
+```
+
+**Features:**
+- ULID-based request IDs (26 characters, timestamp-prefixed, URL-safe)
+- Automatic request ID generation if not provided
+- Header preservation for distributed tracing
+- Context-based request ID propagation
+- Structured logging with consistent format
+- Compatible with existing middleware patterns
+
 ### Basic Logging (`logging.go`)
 
 **Domain:** Standard log output with level prefixes
