@@ -2,7 +2,7 @@
 
 This document provides a comprehensive overview of all functions in the `github.com/patdeg/common` package, organized by domain. Use this to identify helper functions you may want to import or replace with common's implementations.
 
-**Last Updated:** 2025-11-18
+**Last Updated:** 2025-11-18 (Added geo package)
 
 ---
 
@@ -442,6 +442,72 @@ loggingctx.LogRequest(r, 200, 45*time.Millisecond, 1024)
 #### User Management (`gcp/user.go`)
 - **`GetCurrentUser(c context.Context) (*User, error)`** - Gets current authenticated user
 - **`IsAdmin(c context.Context, u *User) bool`** - Checks if user is admin
+
+---
+
+## 🌍 Geo-Location
+
+### Location Extraction (`geo/location.go`)
+
+**Domain:** Geo-location utilities for AppEngine header parsing
+
+**Types:**
+- **`Location`** - Geographic information extracted from AppEngine headers
+  - `Country string` - ISO 3166-1 alpha-2 country code (e.g., "US")
+  - `Region string` - Region/state (e.g., "ca" for California)
+  - `City string` - City name
+  - `CityLatLong string` - Latitude,longitude coordinates
+  - `DetectedAt time.Time` - When this location was detected
+  - `DetectedFrom string` - "session" or "signup" or custom context
+
+**Functions:**
+- **`ExtractFromRequest(r *http.Request) *Location`** - Extracts geo-location from AppEngine headers (X-Appengine-Country, X-Appengine-Region, X-Appengine-City, X-Appengine-CityLatLong)
+- **`(*Location) IsUS() bool`** - Checks if the location is in the United States
+- **`(*Location) IsValid() bool`** - Checks if location data was successfully extracted (Country != "")
+- **`(*Location) GetCountryName() string`** - Returns human-readable country name for common countries, falls back to country code
+- **`(*Location) GetDisplayString() string`** - Returns formatted location string for display (e.g., "San Francisco, ca, United States")
+
+**Example Usage:**
+```go
+import "github.com/patdeg/common/geo"
+
+func handleRequest(w http.ResponseWriter, r *http.Request) {
+    // Extract geo-location from AppEngine headers
+    loc := geo.ExtractFromRequest(r)
+    loc.DetectedFrom = "signup"
+
+    if loc.IsValid() {
+        if loc.IsUS() {
+            log.Printf("US visitor from %s", loc.GetDisplayString())
+        } else {
+            log.Printf("International visitor: %s", loc.GetCountryName())
+        }
+
+        // Store location in datastore with datastore tags
+        // Location struct has datastore tags for persistence
+    }
+}
+```
+
+**Features:**
+- AppEngine header parsing for automatic geo-location detection
+- Datastore tags for easy persistence
+- Human-readable country name mapping for common countries
+- Formatted display strings for UI presentation
+- US detection helper for regional logic
+
+**Supported Countries:**
+- United States (US)
+- Canada (CA)
+- United Kingdom (GB)
+- France (FR)
+- Germany (DE)
+- Japan (JP)
+- China (CN)
+- India (IN)
+- Brazil (BR)
+- Mexico (MX)
+- Falls back to country code for others
 
 ---
 
