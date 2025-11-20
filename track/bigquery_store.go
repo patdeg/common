@@ -98,13 +98,14 @@ func touchPointInsertRequest(tp *TouchPointEvent, now time.Time) *bigquery.Table
 	insertId := strconv.FormatInt(now.UnixNano(), 10) + "-" + tp.RemoteAddr
 
 	// Parse the JSON string into a map for BigQuery's JSON type
-	var payloadData interface{}
+	// Default to empty map to ensure BigQuery sees a record type
+	var payloadData interface{} = map[string]interface{}{}
 	if tp.PayloadJSON != "" {
 		// Parse the JSON string into an interface{} for BigQuery
-		// If parsing fails, we'll store as null rather than failing the insert
+		// If parsing fails, we'll store as empty object rather than failing the insert
 		if err := json.Unmarshal([]byte(tp.PayloadJSON), &payloadData); err != nil {
-			common.Warn("Failed to parse PayloadJSON as JSON, storing as null: %v", err)
-			payloadData = nil
+			common.Warn("Failed to parse PayloadJSON as JSON, storing as empty object: %v", err)
+			payloadData = map[string]interface{}{}
 		}
 	}
 
