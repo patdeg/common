@@ -174,7 +174,7 @@ func createTouchpointsTableInBigQuery(c context.Context) error {
 				{Name: "Host", Type: "STRING", Description: "Host"},                       // HTTP host header
 				{Name: "RemoteAddr", Type: "STRING", Description: "RemoteAddr"},           // Client IP address
 				{Name: "UserAgent", Type: "STRING", Description: "UserAgent"},             // User-Agent header
-				{Name: "Payload", Type: "STRING", Description: "JSON-encoded event data"}, // JSON payload with arbitrary event fields
+				{Name: "Payload", Type: "JSON", Description: "JSON event data"}, // JSON payload with arbitrary event fields
 			},
 		},
 		TimePartitioning: &bigquery.TimePartitioning{

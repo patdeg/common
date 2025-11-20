@@ -20,6 +20,7 @@ package track
 // structure.
 
 import (
+	"encoding/json"
 	"strconv"
 	"time"
 
@@ -96,6 +97,17 @@ func eventInsertRequest(v *Visit, now time.Time) *bigquery.TableDataInsertAllReq
 func touchPointInsertRequest(tp *TouchPointEvent, now time.Time) *bigquery.TableDataInsertAllRequest {
 	insertId := strconv.FormatInt(now.UnixNano(), 10) + "-" + tp.RemoteAddr
 
+	// Parse the JSON string into a map for BigQuery's JSON type
+	var payloadData interface{}
+	if tp.PayloadJSON != "" {
+		// Parse the JSON string into an interface{} for BigQuery
+		// If parsing fails, we'll store as null rather than failing the insert
+		if err := json.Unmarshal([]byte(tp.PayloadJSON), &payloadData); err != nil {
+			common.Warn("Failed to parse PayloadJSON as JSON, storing as null: %v", err)
+			payloadData = nil
+		}
+	}
+
 	req := &bigquery.TableDataInsertAllRequest{
 		Kind: "bigquery#tableDataInsertAllRequest",
 		Rows: []*bigquery.TableDataInsertAllRequestRows{
@@ -111,7 +123,7 @@ func touchPointInsertRequest(tp *TouchPointEvent, now time.Time) *bigquery.Table
 					"Host":       tp.Host,
 					"RemoteAddr": tp.RemoteAddr,
 					"UserAgent":  tp.UserAgent,
-					"Payload":    tp.PayloadJSON,
+					"Payload":    payloadData, // Now passing parsed JSON object
 				},
 			},
 		},
