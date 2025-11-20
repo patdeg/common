@@ -142,12 +142,12 @@ func createEventsTableInBigQuery(c context.Context, d string) error {
 	return gcp.CreateTableInBigQuery(c, newTable)
 }
 
-// createTouchpointsTableInBigQuery creates a daily touch points table in
-// BigQuery using the provided date string `d` (format YYYYMMDD). The table is
-// designed for marketing touch point events with a flexible JSON-encoded
-// payload column so that new event fields can be added without schema
-// migrations.
-func createTouchpointsTableInBigQuery(c context.Context, d string) error {
+// createTouchpointsTableInBigQuery creates a single partitioned touch points
+// table in BigQuery. The table is designed for marketing touch point events
+// with a flexible JSON-encoded payload column so that new event fields can be
+// added without schema migrations. The table is partitioned by day on the Time
+// field to optimize query performance and cost.
+func createTouchpointsTableInBigQuery(c context.Context) error {
 	common.Info(">>>> createTouchpointsTableInBigQuery")
 
 	if err := gcp.CreateDatasetIfNotExists(c, touchpointsProjectID, touchpointsDataset); err != nil {
@@ -155,17 +155,14 @@ func createTouchpointsTableInBigQuery(c context.Context, d string) error {
 		return err
 	}
 
-	if len(d) != 8 {
-		return errors.New("table name is badly formatted - expected 8 characters")
-	}
 	newTable := &bigquery.Table{
 		TableReference: &bigquery.TableReference{
 			ProjectId: touchpointsProjectID,
 			DatasetId: touchpointsDataset,
-			TableId:   d,
+			TableId:   "touchpoints",
 		},
-		FriendlyName: "Daily Touchpoints table",
-		Description:  "This table is created automatically to store daily marketing touch point events",
+		FriendlyName: "Touchpoints table",
+		Description:  "This table stores marketing touch point events, partitioned by day on the Time field",
 		Schema: &bigquery.TableSchema{
 			Fields: []*bigquery.TableFieldSchema{
 				{Name: "Time", Type: "TIMESTAMP", Description: "Time"},                    // Timestamp of the touch point
@@ -179,6 +176,10 @@ func createTouchpointsTableInBigQuery(c context.Context, d string) error {
 				{Name: "UserAgent", Type: "STRING", Description: "UserAgent"},             // User-Agent header
 				{Name: "Payload", Type: "STRING", Description: "JSON-encoded event data"}, // JSON payload with arbitrary event fields
 			},
+		},
+		TimePartitioning: &bigquery.TimePartitioning{
+			Type:  "DAY",
+			Field: "Time",
 		},
 	}
 	return gcp.CreateTableInBigQuery(c, newTable)

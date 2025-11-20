@@ -149,15 +149,21 @@ func StoreEventInBigQuery(c context.Context, v *Visit) error {
 }
 
 // StoreTouchPointInBigQuery streams a TouchPointEvent to BigQuery. The dataset
-// and daily table are created on demand if they do not already exist.
+// and partitioned table are created on demand if they do not already exist.
+// The table is partitioned by day on the Time field.
 func StoreTouchPointInBigQuery(c context.Context, e *TouchPointEvent) error {
 	common.Info(">>>> StoreTouchPointInBigQuery")
 	common.Debug("Dataset=%s Project=%s", touchpointsDataset, touchpointsProjectID)
 
 	req := touchPointInsertRequest(e, time.Now())
 
-	tableName := time.Now().Format("20060102")
+	tableName := "touchpoints"
 	common.Debug("Table=%s", tableName)
 
-	return insertWithTableCreation(c, touchpointsProjectID, touchpointsDataset, tableName, req, createTouchpointsTableInBigQuery)
+	// Create a wrapper function that matches the expected signature
+	createTableFunc := func(ctx context.Context, _ string) error {
+		return createTouchpointsTableInBigQuery(ctx)
+	}
+
+	return insertWithTableCreation(c, touchpointsProjectID, touchpointsDataset, tableName, req, createTableFunc)
 }
