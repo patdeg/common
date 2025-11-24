@@ -165,16 +165,17 @@ func createTouchpointsTableInBigQuery(c context.Context) error {
 		Description:  "This table stores marketing touch point events, partitioned by day on the Time field",
 		Schema: &bigquery.TableSchema{
 			Fields: []*bigquery.TableFieldSchema{
-				{Name: "Time", Type: "TIMESTAMP", Description: "Time"},                    // Timestamp of the touch point
-				{Name: "Category", Type: "STRING", Description: "Category"},               // Event category
-				{Name: "Action", Type: "STRING", Description: "Action"},                   // Event action
-				{Name: "Label", Type: "STRING", Description: "Label"},                     // Event label
-				{Name: "Referer", Type: "STRING", Description: "Referer"},                 // HTTP referer
-				{Name: "Path", Type: "STRING", Description: "Path"},                       // Request path
-				{Name: "Host", Type: "STRING", Description: "Host"},                       // HTTP host header
-				{Name: "RemoteAddr", Type: "STRING", Description: "RemoteAddr"},           // Client IP address
-				{Name: "UserAgent", Type: "STRING", Description: "UserAgent"},             // User-Agent header
-				{Name: "Payload", Type: "JSON", Description: "JSON event data"}, // JSON payload with arbitrary event fields
+				{Name: "Time", Type: "TIMESTAMP", Description: "Time"},          // Timestamp of the touch point
+				{Name: "Category", Type: "STRING", Description: "Category"},     // Event category
+				{Name: "Action", Type: "STRING", Description: "Action"},         // Event action
+				{Name: "Label", Type: "STRING", Description: "Label"},           // Event label
+				{Name: "Referer", Type: "STRING", Description: "Referer"},       // HTTP referer
+				{Name: "Path", Type: "STRING", Description: "Path"},             // Request path
+				{Name: "Host", Type: "STRING", Description: "Host"},             // HTTP host header
+				{Name: "RemoteAddr", Type: "STRING", Description: "RemoteAddr"}, // Client IP address
+				{Name: "UserAgent", Type: "STRING", Description: "UserAgent"},   // User-Agent header
+				// Keep payload as JSON-encoded string to avoid schema mismatches with existing tables.
+				{Name: "Payload", Type: "STRING", Description: "JSON-encoded event data"},
 			},
 		},
 		TimePartitioning: &bigquery.TimePartitioning{
