@@ -20,6 +20,7 @@ package track
 // structure.
 
 import (
+	"encoding/json"
 	"strconv"
 	"time"
 
@@ -93,8 +94,35 @@ func eventInsertRequest(v *Visit, now time.Time) *bigquery.TableDataInsertAllReq
 // StoreTouchPointInBigQuery. The insertId combines the current timestamp in
 // nanoseconds with the RemoteAddr to provide a reasonably unique identifier
 // while still allowing BigQuery to de-duplicate retried inserts.
+//
+// IMPORTANT: BigQuery JSON Column Handling
+// ========================================
+// The Payload column uses BigQuery's native JSON type for queryable fields.
+// This enables SQL queries like:
+//
+//     SELECT Payload.utm_source, Payload.utm_campaign FROM touchpoints
+//     WHERE Payload.utm_medium = "cpc"
+//
+// The PayloadJSON string is parsed into a map[string]interface{} before insertion.
+// BigQuery's streaming API requires the value to be a Go map/struct, NOT a JSON string.
+// The API will serialize the map to JSON internally.
+//
+// If PayloadJSON is empty or invalid JSON, an empty map {} is inserted to ensure
+// the row is not rejected. Invalid JSON is logged as a warning.
 func touchPointInsertRequest(tp *TouchPointEvent, now time.Time) *bigquery.TableDataInsertAllRequest {
 	insertId := strconv.FormatInt(now.UnixNano(), 10) + "-" + tp.RemoteAddr
+
+	// Parse PayloadJSON string into a map for BigQuery JSON column.
+	// BigQuery JSON type requires a parsed object, not a JSON string.
+	var payloadMap map[string]interface{}
+	if tp.PayloadJSON != "" {
+		if err := json.Unmarshal([]byte(tp.PayloadJSON), &payloadMap); err != nil {
+			common.Warn("touchPointInsertRequest: failed to parse PayloadJSON, using empty map: %v", err)
+			payloadMap = make(map[string]interface{})
+		}
+	} else {
+		payloadMap = make(map[string]interface{})
+	}
 
 	req := &bigquery.TableDataInsertAllRequest{
 		Kind: "bigquery#tableDataInsertAllRequest",
@@ -111,8 +139,8 @@ func touchPointInsertRequest(tp *TouchPointEvent, now time.Time) *bigquery.Table
 					"Host":       tp.Host,
 					"RemoteAddr": tp.RemoteAddr,
 					"UserAgent":  tp.UserAgent,
-					// Keep payload as JSON-encoded string to match existing STRING schemas.
-					"Payload": tp.PayloadJSON,
+					// Payload is a parsed map for BigQuery JSON type (enables Payload.field queries)
+					"Payload": payloadMap,
 				},
 			},
 		},

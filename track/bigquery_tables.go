@@ -144,9 +144,27 @@ func createEventsTableInBigQuery(c context.Context, d string) error {
 
 // createTouchpointsTableInBigQuery creates a single partitioned touch points
 // table in BigQuery. The table is designed for marketing touch point events
-// with a flexible JSON-encoded payload column so that new event fields can be
-// added without schema migrations. The table is partitioned by day on the Time
-// field to optimize query performance and cost.
+// with a flexible JSON column for queryable event-specific fields.
+//
+// IMPORTANT: BigQuery JSON Column Requirements
+// ============================================
+// The Payload column uses BigQuery's native JSON type, which enables SQL queries like:
+//
+//     SELECT Payload.utm_source, Payload.utm_campaign FROM touchpoints
+//     WHERE Payload.utm_medium = "cpc"
+//
+// For streaming inserts, the Payload value MUST be a parsed Go map (map[string]interface{}),
+// NOT a JSON-encoded string. The BigQuery streaming API will serialize the map to JSON.
+//
+// CORRECT:
+//     "Payload": map[string]interface{}{"utm_source": "google", "utm_campaign": "spring2025"}
+//
+// WRONG:
+//     "Payload": `{"utm_source": "google", "utm_campaign": "spring2025"}`  // String - will fail!
+//
+// See touchPointInsertRequest() in bigquery_store.go for the implementation.
+//
+// The table is partitioned by day on the Time field to optimize query performance and cost.
 func createTouchpointsTableInBigQuery(c context.Context) error {
 	common.Info(">>>> createTouchpointsTableInBigQuery")
 
@@ -162,20 +180,21 @@ func createTouchpointsTableInBigQuery(c context.Context) error {
 			TableId:   "touchpoints",
 		},
 		FriendlyName: "Touchpoints table",
-		Description:  "This table stores marketing touch point events, partitioned by day on the Time field",
+		Description:  "Marketing touch point events with queryable JSON payload. Query with: SELECT Payload.field_name",
 		Schema: &bigquery.TableSchema{
 			Fields: []*bigquery.TableFieldSchema{
-				{Name: "Time", Type: "TIMESTAMP", Description: "Time"},          // Timestamp of the touch point
-				{Name: "Category", Type: "STRING", Description: "Category"},     // Event category
-				{Name: "Action", Type: "STRING", Description: "Action"},         // Event action
-				{Name: "Label", Type: "STRING", Description: "Label"},           // Event label
-				{Name: "Referer", Type: "STRING", Description: "Referer"},       // HTTP referer
-				{Name: "Path", Type: "STRING", Description: "Path"},             // Request path
-				{Name: "Host", Type: "STRING", Description: "Host"},             // HTTP host header
-				{Name: "RemoteAddr", Type: "STRING", Description: "RemoteAddr"}, // Client IP address
-				{Name: "UserAgent", Type: "STRING", Description: "UserAgent"},   // User-Agent header
-				// Keep payload as JSON-encoded string to avoid schema mismatches with existing tables.
-				{Name: "Payload", Type: "STRING", Description: "JSON-encoded event data"},
+				{Name: "Time", Type: "TIMESTAMP", Description: "Timestamp of the touch point event"},
+				{Name: "Category", Type: "STRING", Description: "Event category (e.g., 'landing', 'campaign')"},
+				{Name: "Action", Type: "STRING", Description: "Event action (e.g., 'view', 'cta_click')"},
+				{Name: "Label", Type: "STRING", Description: "Optional event label"},
+				{Name: "Referer", Type: "STRING", Description: "HTTP Referer header"},
+				{Name: "Path", Type: "STRING", Description: "Request path (e.g., '/pricing')"},
+				{Name: "Host", Type: "STRING", Description: "HTTP host header"},
+				{Name: "RemoteAddr", Type: "STRING", Description: "Client IP address"},
+				{Name: "UserAgent", Type: "STRING", Description: "User-Agent header"},
+				// JSON type enables dot-notation queries: SELECT Payload.utm_source, Payload.utm_campaign
+				// The streaming insert MUST pass a parsed map, not a JSON string.
+				{Name: "Payload", Type: "JSON", Description: "Queryable JSON payload (use Payload.field_name in SQL)"},
 			},
 		},
 		TimePartitioning: &bigquery.TimePartitioning{
