@@ -22,6 +22,7 @@
 package gcp
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -130,42 +131,86 @@ func CreateTableInBigQuery(c context.Context, newTable *bigquery.Table) error {
 // once. Errors from each attempt are logged and the error from the second
 // attempt is returned.
 func StreamDataInBigquery(c context.Context, projectId, datasetId, tableId string, req *bigquery.TableDataInsertAllRequest) error {
+	Debug("[STREAM_BQ] Starting StreamDataInBigquery")
+	Debug("[STREAM_BQ] Parameters: project=%s dataset=%s table=%s", projectId, datasetId, tableId)
 
 	if req == nil {
+		Error("[STREAM_BQ] Request is nil!")
 		return errors.New("No req defined for StreamDataInBigquery")
 	}
 
-	bqServiceAccountService, err := GetBQServiceAccountClient(c)
-	if err != nil {
-		Error("Error getting BigQuery Service: %v", err)
-		return err
+	Debug("[STREAM_BQ] Request Kind=%s NumRows=%d", req.Kind, len(req.Rows))
+	for i, row := range req.Rows {
+		Debug("[STREAM_BQ] Row[%d] InsertId=%s", i, row.InsertId)
+		Debug("[STREAM_BQ] Row[%d] Json has %d fields", i, len(row.Json))
+		for k, v := range row.Json {
+			Debug("[STREAM_BQ] Row[%d] Json[%s] type=%T", i, k, v)
+			// For maps, log the nested structure
+			if m, ok := v.(map[string]interface{}); ok {
+				Debug("[STREAM_BQ] Row[%d] Json[%s] is a map with %d keys", i, k, len(m))
+				for mk, mv := range m {
+					Debug("[STREAM_BQ] Row[%d] Json[%s][%s] type=%T value=%v", i, k, mk, mv, mv)
+				}
+			} else {
+				Debug("[STREAM_BQ] Row[%d] Json[%s] value=%v", i, k, v)
+			}
+		}
 	}
 
+	// Serialize the request for comprehensive logging
+	if reqJSON, err := json.Marshal(req); err == nil {
+		Debug("[STREAM_BQ] Full request JSON: %s", string(reqJSON))
+	} else {
+		Error("[STREAM_BQ] Failed to marshal request for debug: %v", err)
+	}
+
+	Debug("[STREAM_BQ] Getting BigQuery service client...")
+	bqServiceAccountService, err := GetBQServiceAccountClient(c)
+	if err != nil {
+		Error("[STREAM_BQ] Error getting BigQuery Service: %v", err)
+		return err
+	}
+	Debug("[STREAM_BQ] BigQuery service client obtained successfully")
+
+	Debug("[STREAM_BQ] Calling InsertAll API...")
 	resp, err := bigquery.
 		NewTabledataService(bqServiceAccountService).
 		InsertAll(projectId, datasetId, tableId, req).
 		Do()
 	if err != nil {
-		Info("Error streaming data to BigQuery, will retry in 10 seconds: %v", err)
+		Info("[STREAM_BQ] First attempt failed: %v", err)
+		Info("[STREAM_BQ] Error type: %T", err)
+		Info("[STREAM_BQ] Will retry in 10 seconds...")
 		time.Sleep(time.Second * 10)
+		Debug("[STREAM_BQ] Retrying InsertAll API...")
 		resp, err = bigquery.
 			NewTabledataService(bqServiceAccountService).
 			InsertAll(projectId, datasetId, tableId, req).
 			Do()
 		if err != nil {
-			Error("Second attempt to stream data to BigQuery failed: %v", err)
+			Error("[STREAM_BQ] Second attempt to stream data to BigQuery failed: %v", err)
+			Error("[STREAM_BQ] Second attempt error type: %T", err)
 			return err
 		} else {
-			Info("2nd try was successful")
+			Info("[STREAM_BQ] 2nd try was successful")
 		}
+	} else {
+		Debug("[STREAM_BQ] InsertAll API call succeeded")
 	}
+
+	Debug("[STREAM_BQ] Checking response for insert errors...")
+	Debug("[STREAM_BQ] Response has %d InsertErrors entries", len(resp.InsertErrors))
 
 	isError := false
 	for i, insertError := range resp.InsertErrors {
 		if insertError != nil {
+			Debug("[STREAM_BQ] InsertError[%d] Index=%d, has %d errors", i, insertError.Index, len(insertError.Errors))
 			for j, e := range insertError.Errors {
+				Debug("[STREAM_BQ] InsertError[%d].Errors[%d]: Reason=%s Message=%s Location=%s DebugInfo=%s", i, j, e.Reason, e.Message, e.Location, e.DebugInfo)
 				if (e.DebugInfo != "") || (e.Message != "") || (e.Reason != "") {
-					Error("BigQuery error %v: %v at %v/%v", e.Reason, e.Message, i, j)
+					Error("[STREAM_BQ] BigQuery error %v: %v at %v/%v", e.Reason, e.Message, i, j)
+					Error("[STREAM_BQ] Error location: %s", e.Location)
+					Error("[STREAM_BQ] Error debugInfo: %s", e.DebugInfo)
 					isError = true
 				}
 			}
@@ -173,9 +218,11 @@ func StreamDataInBigquery(c context.Context, projectId, datasetId, tableId strin
 	}
 
 	if isError {
+		Error("[STREAM_BQ] Returning error due to insert errors")
 		return errors.New("There was an error streaming data to Big Query")
 	}
 
+	Debug("[STREAM_BQ] StreamDataInBigquery completed successfully")
 	return nil
 
 }

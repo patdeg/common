@@ -95,34 +95,71 @@ func eventInsertRequest(v *Visit, now time.Time) *bigquery.TableDataInsertAllReq
 // nanoseconds with the RemoteAddr to provide a reasonably unique identifier
 // while still allowing BigQuery to de-duplicate retried inserts.
 //
-// IMPORTANT: BigQuery JSON Column Handling
-// ========================================
-// The Payload column uses BigQuery's native JSON type for queryable fields.
-// This enables SQL queries like:
+// DUAL-COLUMN PATTERN FOR PAYLOAD DATA
+// ====================================
+// The touchpoints table uses a dual-column pattern for payload data:
 //
-//     SELECT Payload.utm_source, Payload.utm_campaign FROM touchpoints
-//     WHERE Payload.utm_medium = "cpc"
+// 1. PayloadString (STRING) - Used for INGESTION
+//    - Raw JSON string, always succeeds with streaming insert
+//    - Populated automatically by this function
+//    - Never causes insert errors
 //
-// The PayloadJSON string is parsed into a map[string]interface{} before insertion.
-// BigQuery's streaming API requires the value to be a Go map/struct, NOT a JSON string.
-// The API will serialize the map to JSON internally.
+// 2. Payload (JSON) - Used for QUERIES
+//    - BigQuery native JSON type for dot-notation queries
+//    - Populated MANUALLY via SQL UPDATE (not by this function)
+//    - Enables queries like: SELECT Payload.utm_source FROM touchpoints
 //
-// If PayloadJSON is empty or invalid JSON, an empty map {} is inserted to ensure
-// the row is not rejected. Invalid JSON is logged as a warning.
+// WHY THIS PATTERN?
+// -----------------
+// BigQuery's streaming insert API (v2) has issues with JSON column types.
+// Passing Go maps or JSON strings to JSON columns causes "not a record" errors.
+// Using a STRING column for ingestion is 100% reliable.
+//
+// MANUAL CONVERSION (run as needed):
+// ----------------------------------
+//     UPDATE `demeterics.touchpoints.touchpoints`
+//     SET Payload = SAFE.PARSE_JSON(PayloadString)
+//     WHERE Payload IS NULL
+//       AND PayloadString IS NOT NULL
+//       AND PayloadString != '{}'
+//       AND _PARTITIONTIME >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+//
+// QUERYING BEFORE CONVERSION:
+// ---------------------------
+// You can query PayloadString directly using JSON functions:
+//     SELECT JSON_VALUE(PayloadString, '$.utm_source') as utm_source
+//     FROM touchpoints
+//
+// See docs/TOUCHPOINTS_PAYLOAD.md in this repository for full documentation.
 func touchPointInsertRequest(tp *TouchPointEvent, now time.Time) *bigquery.TableDataInsertAllRequest {
-	insertId := strconv.FormatInt(now.UnixNano(), 10) + "-" + tp.RemoteAddr
-
-	// Parse PayloadJSON string into a map for BigQuery JSON column.
-	// BigQuery JSON type requires a parsed object, not a JSON string.
-	var payloadMap map[string]interface{}
+	common.Debug("[TOUCHPOINT_INSERT] Starting touchPointInsertRequest")
+	common.Debug("[TOUCHPOINT_INSERT] Input TouchPointEvent: Time=%v Category=%s Action=%s Label=%s", tp.Time, tp.Category, tp.Action, tp.Label)
+	common.Debug("[TOUCHPOINT_INSERT] Input TouchPointEvent: Path=%s Host=%s RemoteAddr=%s", tp.Path, tp.Host, tp.RemoteAddr)
+	common.Debug("[TOUCHPOINT_INSERT] Input TouchPointEvent: Referer=%s UserAgent=%s", tp.Referer, tp.UserAgent)
+	common.Debug("[TOUCHPOINT_INSERT] Input TouchPointEvent: PayloadJSON length=%d", len(tp.PayloadJSON))
 	if tp.PayloadJSON != "" {
-		if err := json.Unmarshal([]byte(tp.PayloadJSON), &payloadMap); err != nil {
-			common.Warn("touchPointInsertRequest: failed to parse PayloadJSON, using empty map: %v", err)
-			payloadMap = make(map[string]interface{})
-		}
-	} else {
-		payloadMap = make(map[string]interface{})
+		common.Debug("[TOUCHPOINT_INSERT] Input TouchPointEvent: PayloadJSON=%s", tp.PayloadJSON)
 	}
+
+	insertId := strconv.FormatInt(now.UnixNano(), 10) + "-" + tp.RemoteAddr
+	common.Debug("[TOUCHPOINT_INSERT] Generated insertId=%s", insertId)
+
+	// For BigQuery JSON columns via the streaming insert API (v2), we pass the
+	// JSON as a string. The API will parse it into the JSON column type.
+	// Using a Go map directly doesn't work - it causes "not a record" errors.
+	payloadJSONStr := tp.PayloadJSON
+	if payloadJSONStr == "" {
+		payloadJSONStr = "{}"
+	} else {
+		// Validate it's proper JSON
+		var testParse map[string]interface{}
+		if err := json.Unmarshal([]byte(payloadJSONStr), &testParse); err != nil {
+			common.Warn("[TOUCHPOINT_INSERT] PayloadJSON is not valid JSON: %v", err)
+			common.Warn("[TOUCHPOINT_INSERT] PayloadJSON content: %s", payloadJSONStr)
+			payloadJSONStr = "{}"
+		}
+	}
+	common.Debug("[TOUCHPOINT_INSERT] Payload JSON string: %s", payloadJSONStr)
 
 	req := &bigquery.TableDataInsertAllRequest{
 		Kind: "bigquery#tableDataInsertAllRequest",
@@ -139,13 +176,33 @@ func touchPointInsertRequest(tp *TouchPointEvent, now time.Time) *bigquery.Table
 					"Host":       tp.Host,
 					"RemoteAddr": tp.RemoteAddr,
 					"UserAgent":  tp.UserAgent,
-					// Payload is a parsed map for BigQuery JSON type (enables Payload.field queries)
-					"Payload": payloadMap,
+					// PayloadString for reliable streaming insert (STRING column)
+					// See docs/TOUCHPOINTS_PAYLOAD.md for dual-column pattern
+					"PayloadString": payloadJSONStr,
 				},
 			},
 		},
 	}
 
+	common.Debug("[TOUCHPOINT_INSERT] Built TableDataInsertAllRequest with Kind=%s", req.Kind)
+	common.Debug("[TOUCHPOINT_INSERT] Request has %d rows", len(req.Rows))
+	if len(req.Rows) > 0 {
+		row := req.Rows[0]
+		common.Debug("[TOUCHPOINT_INSERT] Row[0] InsertId=%s", row.InsertId)
+		common.Debug("[TOUCHPOINT_INSERT] Row[0] Json has %d fields", len(row.Json))
+		for k, v := range row.Json {
+			common.Debug("[TOUCHPOINT_INSERT] Row[0] Json[%s] = %v (type: %T)", k, v, v)
+		}
+	}
+
+	// Serialize the entire request for comprehensive debugging
+	if reqJSON, err := json.Marshal(req); err == nil {
+		common.Debug("[TOUCHPOINT_INSERT] Full request as JSON: %s", string(reqJSON))
+	} else {
+		common.Error("[TOUCHPOINT_INSERT] Failed to marshal request for debug: %v", err)
+	}
+
+	common.Debug("[TOUCHPOINT_INSERT] Completed touchPointInsertRequest")
 	return req
 }
 
@@ -181,18 +238,35 @@ func StoreEventInBigQuery(c context.Context, v *Visit) error {
 // and partitioned table are created on demand if they do not already exist.
 // The table is partitioned by day on the Time field.
 func StoreTouchPointInBigQuery(c context.Context, e *TouchPointEvent) error {
-	common.Info(">>>> StoreTouchPointInBigQuery")
-	common.Debug("Dataset=%s Project=%s", touchpointsDataset, touchpointsProjectID)
+	common.Info("[TOUCHPOINT_STORE] >>>> StoreTouchPointInBigQuery starting")
+	common.Debug("[TOUCHPOINT_STORE] Dataset=%s Project=%s", touchpointsDataset, touchpointsProjectID)
+	common.Debug("[TOUCHPOINT_STORE] TouchPointEvent: Category=%s Action=%s Label=%s", e.Category, e.Action, e.Label)
+	common.Debug("[TOUCHPOINT_STORE] TouchPointEvent: Time=%v Host=%s Path=%s", e.Time, e.Host, e.Path)
+	common.Debug("[TOUCHPOINT_STORE] TouchPointEvent: RemoteAddr=%s Referer=%s", e.RemoteAddr, e.Referer)
+	common.Debug("[TOUCHPOINT_STORE] TouchPointEvent: UserAgent length=%d PayloadJSON length=%d", len(e.UserAgent), len(e.PayloadJSON))
 
-	req := touchPointInsertRequest(e, time.Now())
+	now := time.Now()
+	common.Debug("[TOUCHPOINT_STORE] Current time for insert: %v", now)
+
+	req := touchPointInsertRequest(e, now)
+	common.Debug("[TOUCHPOINT_STORE] touchPointInsertRequest returned, request built")
 
 	tableName := "touchpoints"
-	common.Debug("Table=%s", tableName)
+	common.Debug("[TOUCHPOINT_STORE] Target table=%s", tableName)
 
 	// Create a wrapper function that matches the expected signature
 	createTableFunc := func(ctx context.Context, _ string) error {
+		common.Debug("[TOUCHPOINT_STORE] createTableFunc called, invoking createTouchpointsTableInBigQuery")
 		return createTouchpointsTableInBigQuery(ctx)
 	}
 
-	return insertWithTableCreation(c, touchpointsProjectID, touchpointsDataset, tableName, req, createTableFunc)
+	common.Debug("[TOUCHPOINT_STORE] Calling insertWithTableCreation with project=%s dataset=%s table=%s", touchpointsProjectID, touchpointsDataset, tableName)
+	err := insertWithTableCreation(c, touchpointsProjectID, touchpointsDataset, tableName, req, createTableFunc)
+	if err != nil {
+		common.Error("[TOUCHPOINT_STORE] insertWithTableCreation failed: %v", err)
+		common.Error("[TOUCHPOINT_STORE] Failed event details: Category=%s Action=%s Label=%s Host=%s Path=%s", e.Category, e.Action, e.Label, e.Host, e.Path)
+	} else {
+		common.Info("[TOUCHPOINT_STORE] StoreTouchPointInBigQuery completed successfully")
+	}
+	return err
 }

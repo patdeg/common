@@ -192,8 +192,11 @@ func createTouchpointsTableInBigQuery(c context.Context) error {
 				{Name: "Host", Type: "STRING", Description: "HTTP host header"},
 				{Name: "RemoteAddr", Type: "STRING", Description: "Client IP address"},
 				{Name: "UserAgent", Type: "STRING", Description: "User-Agent header"},
-				// JSON type enables dot-notation queries: SELECT Payload.utm_source, Payload.utm_campaign
-				// The streaming insert MUST pass a parsed map, not a JSON string.
+				// PayloadString (STRING) - Used for INGESTION via streaming insert
+				// Streaming insert API has issues with JSON columns, so we use STRING for reliable ingestion
+				{Name: "PayloadString", Type: "STRING", Description: "Raw JSON string payload for streaming insert"},
+				// Payload (JSON) - Used for QUERIES with dot-notation (e.g., Payload.utm_source)
+				// Populate via: UPDATE SET Payload = SAFE.PARSE_JSON(PayloadString) WHERE Payload IS NULL
 				{Name: "Payload", Type: "JSON", Description: "Queryable JSON payload (use Payload.field_name in SQL)"},
 			},
 		},
