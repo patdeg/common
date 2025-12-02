@@ -176,6 +176,9 @@ func touchPointInsertRequest(tp *TouchPointEvent, now time.Time) *bigquery.Table
 					"Host":       tp.Host,
 					"RemoteAddr": tp.RemoteAddr,
 					"UserAgent":  tp.UserAgent,
+					"Country":    tp.Country,
+					"Region":     tp.Region,
+					"City":       tp.City,
 					// PayloadString for reliable streaming insert (STRING column)
 					// See docs/TOUCHPOINTS_PAYLOAD.md for dual-column pattern
 					"PayloadString": payloadJSONStr,

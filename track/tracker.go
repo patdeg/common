@@ -333,6 +333,9 @@ func TrackTouchPoint(r *http.Request, category, action, label string, payload ma
 			Host:        reqCopy.Host,
 			RemoteAddr:  reqCopy.RemoteAddr,
 			UserAgent:   uaHeader,
+			Country:     reqCopy.Header.Get("X-AppEngine-Country"),
+			Region:      reqCopy.Header.Get("X-AppEngine-Region"),
+			City:        reqCopy.Header.Get("X-AppEngine-City"),
 			PayloadJSON: payloadJSON,
 		}
 

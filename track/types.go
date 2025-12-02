@@ -137,6 +137,12 @@ type TouchPointEvent struct {
 	RemoteAddr string `json:"remoteAddr,omitempty"`
 	// UserAgent captures the full user agent string for the visitor.
 	UserAgent string `json:"userAgent,omitempty"`
+	// Country is the visitor country derived from AppEngine geolocation headers.
+	Country string `json:"country,omitempty"`
+	// Region is the visitor region derived from AppEngine geolocation headers.
+	Region string `json:"region,omitempty"`
+	// City is the visitor city derived from AppEngine geolocation headers.
+	City string `json:"city,omitempty"`
 	// PayloadJSON stores a JSON-encoded payload with arbitrary event fields.
 	PayloadJSON string `json:"payloadJson,omitempty"`
 }

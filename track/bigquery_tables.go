@@ -192,6 +192,9 @@ func createTouchpointsTableInBigQuery(c context.Context) error {
 				{Name: "Host", Type: "STRING", Description: "HTTP host header"},
 				{Name: "RemoteAddr", Type: "STRING", Description: "Client IP address"},
 				{Name: "UserAgent", Type: "STRING", Description: "User-Agent header"},
+				{Name: "Country", Type: "STRING", Description: "Country derived from AppEngine X-AppEngine-Country header"},
+				{Name: "Region", Type: "STRING", Description: "Region derived from AppEngine X-AppEngine-Region header"},
+				{Name: "City", Type: "STRING", Description: "City derived from AppEngine X-AppEngine-City header"},
 				// PayloadString (STRING) - Used for INGESTION via streaming insert
 				// Streaming insert API has issues with JSON columns, so we use STRING for reliable ingestion
 				{Name: "PayloadString", Type: "STRING", Description: "Raw JSON string payload for streaming insert"},
