@@ -272,10 +272,32 @@ func TrackEvent(w http.ResponseWriter, r *http.Request, cookie string) {
 // latency does not impact the HTTP response time. The provided payload map is
 // JSON-encoded and stored in the Payload column together with standard fields
 // such as category, action, label, referer and request path.
+//
+// For authenticated user tracking, use TrackTouchPointWithUser instead.
 func TrackTouchPoint(r *http.Request, category, action, label string, payload map[string]any) {
+	TrackTouchPointWithUser(r, category, action, label, 0, "", payload)
+}
+
+// TrackTouchPointWithUser records a touch point event with authenticated user context.
+// Use this for tracking authenticated user actions in the application.
+//
+// Parameters:
+//   - r: HTTP request (used to extract headers, path, etc.)
+//   - category: High-level category (e.g., "purchase", "app", "ai_chat", "feedback")
+//   - action: What happened (e.g., "view", "checkout_start", "create", "submit")
+//   - label: Optional label for additional context (e.g., page name, agent ID)
+//   - userID: Datastore user ID (0 for anonymous visitors)
+//   - email: User email (empty for anonymous visitors)
+//   - payload: Additional key-value data to include (e.g., credits, amount, agent_id)
+//
+// Example:
+//
+//	track.TrackTouchPointWithUser(r, "purchase", "checkout_start", "credits_5000",
+//	    session.UserID, session.Email, map[string]any{"credits": 5000, "amount": 50.00})
+func TrackTouchPointWithUser(r *http.Request, category, action, label string, userID int64, email string, payload map[string]any) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			fmt.Printf("Recovered panic in TrackTouchPoint: %v\n", rec)
+			fmt.Printf("Recovered panic in TrackTouchPointWithUser: %v\n", rec)
 		}
 	}()
 
@@ -285,16 +307,16 @@ func TrackTouchPoint(r *http.Request, category, action, label string, payload ma
 
 	go func() {
 		c := ctx
-		common.Info(">>>> TrackTouchPoint")
+		common.Info(">>>> TrackTouchPointWithUser category=%s action=%s label=%s userID=%d", category, action, label, userID)
 
 		// Ignore obvious bot traffic to keep marketing analytics clean.
 		uaHeader := reqCopy.Header.Get("User-Agent")
 		if common.IsBot(uaHeader) {
-			common.Info("TrackTouchPoint: Events from Bots, ignoring")
+			common.Info("TrackTouchPointWithUser: Events from Bots, ignoring")
 			return
 		}
 		if reqCopy.Header.Get("X-AppEngine-Country") == "ZZ" {
-			common.Info("TrackTouchPoint: Country is ZZ - most likely a bot, ignoring")
+			common.Info("TrackTouchPointWithUser: Country is ZZ - most likely a bot, ignoring")
 			return
 		}
 
@@ -317,7 +339,7 @@ func TrackTouchPoint(r *http.Request, category, action, label string, payload ma
 		payloadJSON := ""
 		if len(eventPayload) > 0 {
 			if b, err := json.Marshal(eventPayload); err != nil {
-				common.Error("TrackTouchPoint: failed to marshal payload: %v", err)
+				common.Error("TrackTouchPointWithUser: failed to marshal payload: %v", err)
 			} else {
 				payloadJSON = string(b)
 			}
@@ -328,6 +350,8 @@ func TrackTouchPoint(r *http.Request, category, action, label string, payload ma
 			Category:    common.Trunc500(category),
 			Action:      common.Trunc500(action),
 			Label:       common.Trunc500(label),
+			UserID:      userID,
+			Email:       email,
 			Referer:     reqCopy.Header.Get("Referer"),
 			Path:        reqCopy.URL.Path,
 			Host:        reqCopy.Host,

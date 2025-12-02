@@ -171,6 +171,8 @@ func touchPointInsertRequest(tp *TouchPointEvent, now time.Time) *bigquery.Table
 					"Category":   tp.Category,
 					"Action":     tp.Action,
 					"Label":      tp.Label,
+					"UserID":     tp.UserID,
+					"Email":      tp.Email,
 					"Referer":    tp.Referer,
 					"Path":       tp.Path,
 					"Host":       tp.Host,

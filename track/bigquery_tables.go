@@ -184,9 +184,11 @@ func createTouchpointsTableInBigQuery(c context.Context) error {
 		Schema: &bigquery.TableSchema{
 			Fields: []*bigquery.TableFieldSchema{
 				{Name: "Time", Type: "TIMESTAMP", Description: "Timestamp of the touch point event"},
-				{Name: "Category", Type: "STRING", Description: "Event category (e.g., 'landing', 'campaign')"},
-				{Name: "Action", Type: "STRING", Description: "Event action (e.g., 'view', 'cta_click')"},
-				{Name: "Label", Type: "STRING", Description: "Optional event label"},
+				{Name: "Category", Type: "STRING", Description: "Event category (e.g., 'landing', 'purchase', 'app')"},
+				{Name: "Action", Type: "STRING", Description: "Event action (e.g., 'view', 'checkout_start', 'create')"},
+				{Name: "Label", Type: "STRING", Description: "Optional event label (e.g., page name, agent ID)"},
+				{Name: "UserID", Type: "INTEGER", Description: "Authenticated user's Datastore ID (0 for anonymous)"},
+				{Name: "Email", Type: "STRING", Description: "Authenticated user's email (empty for anonymous)"},
 				{Name: "Referer", Type: "STRING", Description: "HTTP Referer header"},
 				{Name: "Path", Type: "STRING", Description: "Request path (e.g., '/pricing')"},
 				{Name: "Host", Type: "STRING", Description: "HTTP host header"},

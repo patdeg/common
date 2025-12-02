@@ -127,6 +127,10 @@ type TouchPointEvent struct {
 	Action string `json:"action,omitempty"`
 	// Label provides an optional label for the touch point.
 	Label string `json:"label,omitempty"`
+	// UserID is the authenticated user's Datastore ID (0 for anonymous visitors).
+	UserID int64 `json:"userId,omitempty"`
+	// Email is the authenticated user's email address (empty for anonymous visitors).
+	Email string `json:"email,omitempty"`
 	// Referer holds the HTTP Referer header for the request.
 	Referer string `json:"referer,omitempty"`
 	// Path is the HTTP request path (for example "/pricing").
