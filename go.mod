@@ -11,6 +11,7 @@ require (
 	github.com/mssola/user_agent v0.6.0
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/pkoukk/tiktoken-go v0.1.8
+	github.com/yuin/goldmark v1.7.13
 	golang.org/x/net v0.43.0
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/time v0.12.0
