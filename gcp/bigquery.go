@@ -198,8 +198,10 @@ func StreamDataInBigquery(c context.Context, projectId, datasetId, tableId strin
 		Debug("[STREAM_BQ] InsertAll API call succeeded")
 	}
 
-	Debug("[STREAM_BQ] Checking response for insert errors...")
-	Debug("[STREAM_BQ] Response has %d InsertErrors entries", len(resp.InsertErrors))
+	// Only log if there are actual insert issues to report
+	if len(resp.InsertErrors) > 0 {
+		Debug("[STREAM_BQ] Response has %d insert issues", len(resp.InsertErrors))
+	}
 
 	isError := false
 	for i, insertError := range resp.InsertErrors {

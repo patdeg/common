@@ -91,7 +91,6 @@ func insertWithTableCreation(c context.Context, projectID, datasetID, tableID st
 		common.Error("[INSERT_WITH_TABLE] Returning error from insertWithTableCreation")
 		return err
 	}
-	common.Debug("[INSERT_WITH_TABLE] streamDataFn succeeded without error")
-	common.Debug("[INSERT_WITH_TABLE] insertWithTableCreation completed successfully")
+	// Success - no need to log on every successful insert
 	return nil
 }
