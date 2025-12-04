@@ -55,13 +55,13 @@ var (
 	llmHTTPClient = &http.Client{Timeout: 60 * time.Second}
 
 	// Global throttle for LLM analysis to prevent duplicate feedback on the same error.
-	// Key: hash of (fileName + funcName + error message), Value: time of last analysis.
+	// Key: hash of (fileName + funcName), Value: time of last analysis.
 	analysisThrottleMu    sync.Mutex
 	analysisThrottleCache = make(map[string]time.Time)
 
 	// AnalysisThrottleDuration controls how long to suppress duplicate error analyses.
-	// Default: 15 minutes. Set to 0 to disable throttling.
-	AnalysisThrottleDuration = 15 * time.Minute
+	// Default: 60 minutes. Set to 0 to disable throttling.
+	AnalysisThrottleDuration = 60 * time.Minute
 )
 
 // CreateLoggingLLM constructs a LoggingLLM for the provided file and function
@@ -238,15 +238,10 @@ func (l *LoggingLLM) triggerLLMAnalysis(message string) {
 }
 
 // computeThrottleKey generates a hash key for throttling based on error context.
-// Uses SHA-256 to create a consistent key from file, function, and message.
+// Uses SHA-256 to create a consistent key from file and function only.
+// This groups all errors from the same function together for throttling.
 func computeThrottleKey(fileName, funcName, message string) string {
-	// Normalize message by taking first 500 chars to group similar errors
-	normalizedMsg := message
-	if len(normalizedMsg) > 500 {
-		normalizedMsg = normalizedMsg[:500]
-	}
-
-	combined := fmt.Sprintf("%s|%s|%s", fileName, funcName, normalizedMsg)
+	combined := fmt.Sprintf("%s|%s", fileName, funcName)
 	hash := sha256.Sum256([]byte(combined))
 	return hex.EncodeToString(hash[:16]) // Use first 16 bytes (32 hex chars)
 }
