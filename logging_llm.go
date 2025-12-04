@@ -17,6 +17,8 @@ package common
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -51,6 +53,15 @@ type LoggingLLM struct {
 
 var (
 	llmHTTPClient = &http.Client{Timeout: 60 * time.Second}
+
+	// Global throttle for LLM analysis to prevent duplicate feedback on the same error.
+	// Key: hash of (fileName + funcName + error message), Value: time of last analysis.
+	analysisThrottleMu    sync.Mutex
+	analysisThrottleCache = make(map[string]time.Time)
+
+	// AnalysisThrottleDuration controls how long to suppress duplicate error analyses.
+	// Default: 15 minutes. Set to 0 to disable throttling.
+	AnalysisThrottleDuration = 15 * time.Minute
 )
 
 // CreateLoggingLLM constructs a LoggingLLM for the provided file and function
@@ -204,16 +215,82 @@ func (l *LoggingLLM) appendEntry(level, message string) {
 
 // triggerLLMAnalysis runs error analysis asynchronously if an API key is
 // configured. Multiple error calls will only trigger a single analysis run.
+// Global throttling prevents duplicate analyses of the same error across instances.
 func (l *LoggingLLM) triggerLLMAnalysis(message string) {
 	if LLMAPIKey == "" {
 		Debug("LLM_API_KEY not configured; skipping LLM analysis for %s.%s", l.fileName, l.funcName)
 		return
 	}
 
+	// Check global throttle before proceeding
+	throttleKey := computeThrottleKey(l.fileName, l.funcName, message)
+	if isThrottled(throttleKey) {
+		Debug("LLM analysis throttled for %s.%s (duplicate within %v)", l.fileName, l.funcName, AnalysisThrottleDuration)
+		return
+	}
+
 	l.analysisOnce.Do(func() {
 		l.lastErrorText = message
+		// Mark as analyzed before running to prevent race conditions
+		markAnalyzed(throttleKey)
 		go l.runLLMAnalysis()
 	})
+}
+
+// computeThrottleKey generates a hash key for throttling based on error context.
+// Uses SHA-256 to create a consistent key from file, function, and message.
+func computeThrottleKey(fileName, funcName, message string) string {
+	// Normalize message by taking first 500 chars to group similar errors
+	normalizedMsg := message
+	if len(normalizedMsg) > 500 {
+		normalizedMsg = normalizedMsg[:500]
+	}
+
+	combined := fmt.Sprintf("%s|%s|%s", fileName, funcName, normalizedMsg)
+	hash := sha256.Sum256([]byte(combined))
+	return hex.EncodeToString(hash[:16]) // Use first 16 bytes (32 hex chars)
+}
+
+// isThrottled checks if an error with the given key was recently analyzed.
+func isThrottled(key string) bool {
+	if AnalysisThrottleDuration == 0 {
+		return false // Throttling disabled
+	}
+
+	analysisThrottleMu.Lock()
+	defer analysisThrottleMu.Unlock()
+
+	lastTime, exists := analysisThrottleCache[key]
+	if !exists {
+		return false
+	}
+
+	// Check if still within throttle window
+	if time.Since(lastTime) < AnalysisThrottleDuration {
+		return true
+	}
+
+	// Expired, remove from cache
+	delete(analysisThrottleCache, key)
+	return false
+}
+
+// markAnalyzed records that an error was just analyzed.
+func markAnalyzed(key string) {
+	analysisThrottleMu.Lock()
+	defer analysisThrottleMu.Unlock()
+
+	analysisThrottleCache[key] = time.Now()
+
+	// Cleanup old entries to prevent memory leak (keep max 1000 entries)
+	if len(analysisThrottleCache) > 1000 {
+		now := time.Now()
+		for k, t := range analysisThrottleCache {
+			if now.Sub(t) > AnalysisThrottleDuration {
+				delete(analysisThrottleCache, k)
+			}
+		}
+	}
 }
 
 func (l *LoggingLLM) runLLMAnalysis() {
