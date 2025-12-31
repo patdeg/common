@@ -107,3 +107,43 @@ All methods emit to stdout/stderr via the existing logging helpers and append ma
 5. Appends the model’s markdown response to the summary as an `LLM` entry.
 
 Use the LLM output to surface suggested root causes or follow-up instrumentation automatically as part of error logs.
+
+### Demeterics Tagging
+
+When using the Demeterics proxy, you can add metadata tags for analytics tracking. Tags are prepended to the LLM prompt as `/// KEY value` lines and automatically stripped by Demeterics before forwarding to the provider (no token cost).
+
+```go
+log := common.CreateLoggingLLM("payment.go", "ProcessPayment", "starting").
+    WithTags(map[string]string{
+        common.TagApp:  "billing-service",
+        common.TagFlow: "checkout.payment",
+        common.TagEnv:  "production",
+    })
+```
+
+Or set individual tags:
+
+```go
+log := common.CreateLoggingLLM("handler.go", "HandleRequest", "").
+    SetTag(common.TagApp, "api-gateway").
+    SetTag(common.TagFlow, "auth.login")
+```
+
+#### Available Tag Constants
+
+| Constant | Key | Description |
+| --- | --- | --- |
+| `TagApp` | APP | Application name |
+| `TagFlow` | FLOW | Flow/feature name (e.g., "checkout.payment") |
+| `TagProduct` | PRODUCT | Product identifier |
+| `TagCompany` | COMPANY | Company/tenant identifier |
+| `TagUnit` | UNIT | Business unit |
+| `TagUser` | USER | User identifier (anonymized) |
+| `TagSession` | SESSION | Session identifier |
+| `TagMarket` | MARKET | Market/region |
+| `TagVariant` | VARIANT | A/B test variant |
+| `TagVersion` | VERSION | App version |
+| `TagEnv` | ENV | Environment (production, staging, dev) |
+| `TagProject` | PROJECT | GCP project or similar |
+
+Custom tags are also supported—just use any string key.

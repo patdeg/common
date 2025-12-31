@@ -35,6 +35,28 @@ import (
 // storing it in a database or sending notifications.
 type AnalysisCallback func(analysis string) error
 
+// Demeterics tag keys for analytics and tracking.
+// See https://demeterics.ai/docs/prompt for full documentation.
+const (
+	// Business tags
+	TagApp     = "APP"     // Application name
+	TagFlow    = "FLOW"    // Flow/feature name (e.g., "checkout.payment")
+	TagProduct = "PRODUCT" // Product identifier
+	TagCompany = "COMPANY" // Company/tenant identifier
+	TagUnit    = "UNIT"    // Business unit
+
+	// User/Session tags
+	TagUser    = "USER"    // User identifier (anonymized)
+	TagSession = "SESSION" // Session identifier
+	TagMarket  = "MARKET"  // Market/region
+
+	// Technical tags
+	TagVariant = "VARIANT" // A/B test variant
+	TagVersion = "VERSION" // App version
+	TagEnv     = "ENV"     // Environment (production, staging, dev)
+	TagProject = "PROJECT" // GCP project or similar
+)
+
 // LoggingLLM captures standard log output alongside a markdown summary for a
 // single logical operation. The summary is later available for printing or as
 // additional context for LLM debugging.
@@ -49,6 +71,7 @@ type LoggingLLM struct {
 	analysisOnce     sync.Once
 	lastErrorText    string
 	analysisCallback AnalysisCallback
+	tags             map[string]string
 }
 
 var (
@@ -92,6 +115,45 @@ func CreateLoggingLLMWithCallback(fileName, funcName string, callback AnalysisCa
 	}
 
 	return logger
+}
+
+// WithTags sets Demeterics metadata tags for analytics tracking.
+// Tags are prepended to the LLM prompt as /// KEY value lines and stripped
+// by Demeterics before forwarding to the provider (no token cost).
+// Returns the logger for method chaining.
+//
+// Example:
+//
+//	log := common.CreateLoggingLLM("payment.go", "ProcessPayment", "starting").
+//	    WithTags(map[string]string{
+//	        common.TagApp:  "billing-service",
+//	        common.TagFlow: "checkout.payment",
+//	        common.TagEnv:  "production",
+//	    })
+func (l *LoggingLLM) WithTags(tags map[string]string) *LoggingLLM {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.tags == nil {
+		l.tags = make(map[string]string)
+	}
+	for k, v := range tags {
+		l.tags[k] = v
+	}
+	return l
+}
+
+// SetTag sets a single Demeterics metadata tag.
+// Returns the logger for method chaining.
+func (l *LoggingLLM) SetTag(key, value string) *LoggingLLM {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.tags == nil {
+		l.tags = make(map[string]string)
+	}
+	l.tags[key] = value
+	return l
 }
 
 // Debug logs a debug message and records it inside the markdown summary when
@@ -316,6 +378,28 @@ func (l *LoggingLLM) runLLMAnalysis() {
 func (l *LoggingLLM) buildLLMPrompt() string {
 	var b strings.Builder
 
+	// Prepend Demeterics tags (stripped before provider call, no token cost)
+	l.mu.Lock()
+	if len(l.tags) > 0 {
+		// Write tags in a consistent order for readability
+		tagOrder := []string{TagApp, TagFlow, TagProduct, TagCompany, TagUnit,
+			TagUser, TagSession, TagMarket,
+			TagVariant, TagVersion, TagEnv, TagProject}
+		for _, key := range tagOrder {
+			if val, ok := l.tags[key]; ok {
+				b.WriteString(fmt.Sprintf("/// %s %s\n", key, val))
+			}
+		}
+		// Write any custom tags not in the standard order
+		for key, val := range l.tags {
+			if !isStandardTag(key) {
+				b.WriteString(fmt.Sprintf("/// %s %s\n", key, val))
+			}
+		}
+		b.WriteString("\n")
+	}
+	l.mu.Unlock()
+
 	b.WriteString("You are a senior Go engineer helping debug a failure.\n")
 	b.WriteString("Provide probable root causes, code references, and actionable fixes.\n\n")
 	b.WriteString(fmt.Sprintf("File: %s\nFunction: %s\n\n", l.fileName, l.funcName))
@@ -450,4 +534,15 @@ func truncateForLog(value string, limit int) string {
 		return value
 	}
 	return value[:limit]
+}
+
+// isStandardTag checks if a tag key is one of the predefined Demeterics tags.
+func isStandardTag(key string) bool {
+	switch key {
+	case TagApp, TagFlow, TagProduct, TagCompany, TagUnit,
+		TagUser, TagSession, TagMarket,
+		TagVariant, TagVersion, TagEnv, TagProject:
+		return true
+	}
+	return false
 }
