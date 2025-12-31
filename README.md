@@ -49,8 +49,27 @@ if err := doWork(); err != nil {
     log.ErrorSafe("failed to process request: %v", err)
     return
 }
+```
 
-// Optional: plug in a callback for self-healing behavior (alerts, tickets, etc.)
+#### Demeterics Analytics Tagging
+
+Add metadata tags for analytics tracking (zero token cost—stripped before LLM call):
+
+```go
+log := common.CreateLoggingLLM("payment.go", "ProcessPayment", "starting").
+    WithTags(map[string]string{
+        common.TagApp:  "billing-service",
+        common.TagFlow: "checkout.payment",
+        common.TagEnv:  "production",
+    })
+defer log.Print()
+```
+
+#### Self-Healing Callbacks
+
+Plug in a callback for alerts, tickets, or other automated responses:
+
+```go
 log := common.CreateLoggingLLMWithCallback(
     "handler.go",
     "HandleRequest",
@@ -59,7 +78,7 @@ log := common.CreateLoggingLLMWithCallback(
         return nil
     },
     "processing %s", r.URL.Path,
-)
+).WithTags(map[string]string{common.TagApp: "my-service"})
 defer log.Print()
 ```
 
@@ -131,10 +150,11 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 SENDGRID_API_KEY=SG.example_fake_key.replace_with_real_key
 FROM_EMAIL=noreply@example.com
 
-# Optional: LLM-assisted error analysis
-COMMON_LLM_API_KEY=gsk_example_fake_key_replace_with_real
+# Optional: LLM-assisted error analysis (via Demeterics proxy)
+# See: https://demeterics.ai/docs/prompt for tagging documentation
+COMMON_LLM_API_KEY=dmt_example_fake_key_replace_with_real
 COMMON_LLM_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
-COMMON_LLM_BASE_URL=https://api.groq.com/openai/v1
+COMMON_LLM_BASE_URL=https://api.demeterics.com/groq/v1
 ```
 
 ## 📈 Architecture
