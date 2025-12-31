@@ -8,9 +8,9 @@ Set the following environment variables (usually in your shell or deployment man
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `COMMON_LLM_API_KEY` | _required_ | API key for the OpenAI-compatible endpoint (Groq recommended). |
+| `COMMON_LLM_API_KEY` | _required_ | API key for Demeterics (`dmt_xxx` format). |
 | `COMMON_LLM_MODEL` | `meta-llama/llama-4-scout-17b-16e-instruct` | Chat model used for automated analysis. |
-| `COMMON_LLM_BASE_URL` | `https://api.groq.com/openai/v1` | Base URL for the OpenAI-compatible REST API. |
+| `COMMON_LLM_BASE_URL` | `https://api.demeterics.com/groq/v1` | Base URL for the OpenAI-compatible REST API (Demeterics proxy). |
 
 If `COMMON_LLM_API_KEY` is not set, logging still works but no automated analysis will run when errors happen.
 

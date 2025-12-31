@@ -940,7 +940,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 - **`VERSION string`** - Application version (set via ldflags)
 - **`LLMAPIKey string`** - API key for LLM provider from COMMON_LLM_API_KEY
 - **`LLMModel string`** - LLM model identifier from COMMON_LLM_MODEL (default: llama-4-scout)
-- **`LLMBaseURL string`** - LLM API endpoint from COMMON_LLM_BASE_URL (default: Groq)
+- **`LLMBaseURL string`** - LLM API endpoint from COMMON_LLM_BASE_URL (default: Demeterics)
 
 ---
 

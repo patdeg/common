@@ -372,7 +372,7 @@ func executeLLMRequest(ctx context.Context, prompt string) (string, error) {
 
 	baseURL := strings.TrimSuffix(LLMBaseURL, "/")
 	if baseURL == "" {
-		baseURL = "https://api.groq.com/openai/v1"
+		baseURL = "https://api.demeterics.com/groq/v1"
 	}
 
 	requestBody := struct {

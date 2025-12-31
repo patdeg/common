@@ -64,12 +64,11 @@ var (
 	}()
 
 	// LLMBaseURL defines the HTTP endpoint for the LLM provider. It defaults to
-	// Groq's OpenAI-compatible API but can be overridden with
-	// COMMON_LLM_BASE_URL.
+	// Demeterics' Groq proxy but can be overridden with COMMON_LLM_BASE_URL.
 	LLMBaseURL = func() string {
 		if v := os.Getenv("COMMON_LLM_BASE_URL"); v != "" {
 			return v
 		}
-		return "https://api.groq.com/openai/v1"
+		return "https://api.demeterics.com/groq/v1"
 	}()
 )
