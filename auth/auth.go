@@ -36,10 +36,8 @@ import (
 	"github.com/patdeg/common/gcp"
 	"github.com/patdeg/common/track"
 
-	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/appengine/v2/urlfetch"
 )
 
 var googleConfig = &oauth2.Config{
@@ -143,7 +141,7 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email, err := googleUserEmail(ctx, tok.AccessToken)
+	email, err := googleUserEmail(tok.AccessToken)
 	if err != nil || email == "" {
 		common.Error("googleUserEmail: %v", err)
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -154,13 +152,14 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	if h, _, err2 := net.SplitHostPort(host); err2 == nil {
 		host = h
 	}
+	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 	ck := &http.Cookie{
 		Name:     "user_email",
 		Value:    email,
 		Path:     "/",
 		Expires:  time.Now().Add(24 * time.Hour),
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 	}
 	if host != "localhost" && host != "127.0.0.1" {
@@ -196,18 +195,14 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 // provided OAuth access token. The token is passed via the Authorization header
 // (not URL parameter) to prevent exposure in logs, proxies, and browser history.
 // An empty string is returned if the request fails or the response cannot be decoded.
-func googleUserEmail(c context.Context, token string) (string, error) {
-	client := urlfetch.Client(c)
-
-	// Create request with Authorization header instead of URL parameter
-	// This prevents the access token from appearing in URLs, logs, or proxy caches
+func googleUserEmail(token string) (string, error) {
 	req, err := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v2/userinfo", nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}
