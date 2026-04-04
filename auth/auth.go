@@ -118,11 +118,13 @@ func RedirectIfNotLoggedInAPI(w http.ResponseWriter, r *http.Request) bool {
 
 // GoogleLoginHandler starts the OAuth login process. The optional "redirect"
 // parameter is validated and stored as the OAuth state to protect against open
-// redirects. A login event is also recorded for analytics.
+// redirects. Analytics tracking is disabled when DISABLE_TRACKING=true.
 func GoogleLoginHandler(w http.ResponseWriter, r *http.Request) {
 	state := sanitizeRedirect(r.FormValue("redirect"))
 	url := googleOAuthConfig(r).AuthCodeURL(state)
-	track.TrackEventDetails(w, r, common.GetCookieID(w, r), "Google Login", state, "", 0)
+	if os.Getenv("DISABLE_TRACKING") != "true" {
+		track.TrackEventDetails(w, r, common.GetCookieID(w, r), "Google Login", state, "", 0)
+	}
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
