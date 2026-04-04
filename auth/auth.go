@@ -45,6 +45,7 @@ var googleConfig = &oauth2.Config{
 	ClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
 	Scopes: []string{
 		"https://www.googleapis.com/auth/userinfo.email",
+		"https://www.googleapis.com/auth/userinfo.profile",
 	},
 	Endpoint: google.Endpoint,
 }
@@ -141,31 +142,39 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email, err := googleUserEmail(tok.AccessToken)
-	if err != nil || email == "" {
-		common.Error("googleUserEmail: %v", err)
+	profile, err := googleUserProfile(tok.AccessToken)
+	if err != nil || profile == nil || profile.Email == "" {
+		common.Error("googleUserProfile: %v", err)
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
+	email := profile.Email
 
 	host := r.Host
 	if h, _, err2 := net.SplitHostPort(host); err2 == nil {
 		host = h
 	}
 	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
-	ck := &http.Cookie{
-		Name:     "user_email",
-		Value:    email,
-		Path:     "/",
-		Expires:  time.Now().Add(24 * time.Hour),
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
+	expires := time.Now().Add(24 * time.Hour)
+
+	setCookie := func(name, value string) {
+		if value == "" {
+			return
+		}
+		ck := &http.Cookie{
+			Name: name, Value: url.QueryEscape(value), Path: "/",
+			Expires: expires, HttpOnly: true, Secure: secure,
+			SameSite: http.SameSiteLaxMode,
+		}
+		if host != "localhost" && host != "127.0.0.1" {
+			ck.Domain = host
+		}
+		http.SetCookie(w, ck)
 	}
-	if host != "localhost" && host != "127.0.0.1" {
-		ck.Domain = host
-	}
-	http.SetCookie(w, ck)
+
+	setCookie("user_email", email)
+	setCookie("user_name", profile.Name)
+	setCookie("user_picture", profile.Picture)
 
 	role := "organizer"
 	if adminEmails[email] {
@@ -191,31 +200,45 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirect, http.StatusFound)
 }
 
-// googleUserEmail fetches the authenticated user's email address using the
-// provided OAuth access token. The token is passed via the Authorization header
-// (not URL parameter) to prevent exposure in logs, proxies, and browser history.
-// An empty string is returned if the request fails or the response cannot be decoded.
-func googleUserEmail(token string) (string, error) {
+// GoogleProfile holds the user profile data returned by the Google userinfo endpoint.
+type GoogleProfile struct {
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	Picture string `json:"picture"`
+	ID      string `json:"id"`
+}
+
+// googleUserProfile fetches the authenticated user's profile using the OAuth access token.
+func googleUserProfile(token string) (*GoogleProfile, error) {
 	req, err := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v2/userinfo", nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		common.Error("Google userinfo request failed with status: %d", resp.StatusCode)
-		return "", nil
+		return nil, nil
 	}
 
-	var data struct{ Email string }
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+	var profile GoogleProfile
+	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
+		return nil, err
+	}
+	return &profile, nil
+}
+
+// googleUserEmail is a backward-compatible wrapper.
+func googleUserEmail(token string) (string, error) {
+	p, err := googleUserProfile(token)
+	if err != nil || p == nil {
 		return "", err
 	}
-	return data.Email, nil
+	return p.Email, nil
 }
