@@ -24,6 +24,10 @@
 package auth
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -52,6 +56,12 @@ var googleConfig = &oauth2.Config{
 
 var adminEmails map[string]bool
 
+// cookieSecret is the HMAC key used to sign the user_email cookie. It is
+// loaded from AUTH_COOKIE_SECRET; if unset (e.g. local dev), a random key
+// is generated at startup so cookies remain unforgeable but do not survive
+// a process restart. In production AUTH_COOKIE_SECRET must be set.
+var cookieSecret []byte
+
 func init() {
 	adminEmails = make(map[string]bool)
 	for _, e := range strings.Split(os.Getenv("ADMIN_EMAILS"), ",") {
@@ -60,6 +70,60 @@ func init() {
 			adminEmails[e] = true
 		}
 	}
+
+	if s := os.Getenv("AUTH_COOKIE_SECRET"); s != "" {
+		cookieSecret = []byte(s)
+	} else {
+		cookieSecret = make([]byte, 32)
+		if _, err := rand.Read(cookieSecret); err != nil {
+			panic("auth: failed to seed cookie secret: " + err.Error())
+		}
+		common.Info("AUTH_COOKIE_SECRET not set; using ephemeral key (sessions reset on restart)")
+	}
+}
+
+// signCookieValue returns the cookie value used by the user_email cookie:
+// the email plus a hex-encoded HMAC-SHA256 of the email under cookieSecret.
+func signCookieValue(email string) string {
+	mac := hmac.New(sha256.New, cookieSecret)
+	mac.Write([]byte(email))
+	return email + "|" + hex.EncodeToString(mac.Sum(nil))
+}
+
+// verifyCookieValue parses an email|hex(hmac) cookie value, verifies the
+// HMAC in constant time, and returns the email and true on success.
+// The wire value is QueryEscape'd by setCookie in GoogleCallbackHandler,
+// so we QueryUnescape first.
+func verifyCookieValue(value string) (string, bool) {
+	if decoded, err := url.QueryUnescape(value); err == nil {
+		value = decoded
+	}
+	idx := strings.LastIndex(value, "|")
+	if idx <= 0 {
+		return "", false
+	}
+	email, sigHex := value[:idx], value[idx+1:]
+	sig, err := hex.DecodeString(sigHex)
+	if err != nil {
+		return "", false
+	}
+	mac := hmac.New(sha256.New, cookieSecret)
+	mac.Write([]byte(email))
+	if !hmac.Equal(sig, mac.Sum(nil)) {
+		return "", false
+	}
+	return email, true
+}
+
+// CurrentUser returns the authenticated email from the user_email cookie if
+// present and the cookie's HMAC is valid. Callers MUST use this rather than
+// reading r.Cookie("user_email").Value directly, which is unauthenticated.
+func CurrentUser(r *http.Request) (string, bool) {
+	c, err := r.Cookie("user_email")
+	if err != nil {
+		return "", false
+	}
+	return verifyCookieValue(c.Value)
 }
 
 // sanitizeRedirect ensures the given value is a relative URL path. Any
@@ -97,7 +161,7 @@ func googleOAuthConfig(r *http.Request) *oauth2.Config {
 // the OAuth login flow. The current path is used as the state value so users
 // return to their original destination after logging in.
 func RedirectIfNotLoggedIn(w http.ResponseWriter, r *http.Request) bool {
-	if _, err := r.Cookie("user_email"); err != nil {
+	if _, ok := CurrentUser(r); !ok {
 		url := googleOAuthConfig(r).AuthCodeURL(sanitizeRedirect(r.URL.Path))
 		http.Redirect(w, r, url, http.StatusFound)
 		return true
@@ -109,7 +173,7 @@ func RedirectIfNotLoggedIn(w http.ResponseWriter, r *http.Request) bool {
 // 401 status instead of redirecting. It is intended for API endpoints that
 // require authentication.
 func RedirectIfNotLoggedInAPI(w http.ResponseWriter, r *http.Request) bool {
-	if _, err := r.Cookie("user_email"); err != nil {
+	if _, ok := CurrentUser(r); !ok {
 		http.Error(w, "Login required", http.StatusUnauthorized)
 		return true
 	}
@@ -182,7 +246,7 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, ck)
 	}
 
-	setCookie("user_email", email)
+	setCookie("user_email", signCookieValue(email))
 	setCookie("user_name", profile.Name)
 	setCookie("user_picture", profile.Picture)
 
